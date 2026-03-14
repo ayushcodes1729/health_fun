@@ -14,9 +14,9 @@ pub struct StakeAccount {
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub enum Goal {
-    STEPS,
-    SLEEP,
-    GYM
+    Steps,
+    Sleep,
+    Gym
 }
 
 impl Space for Goal {
