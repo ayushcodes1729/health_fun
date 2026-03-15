@@ -15,7 +15,8 @@ declare_id!("7k8STpaJxptrSVn8BLRDw1CgqGMZoU8iVUjkzHA9oCdp");
 pub mod health_fun {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-        initialize::handler(ctx)
+    pub fn initialize_config(ctx: Context<InitializeConfig>, max_stake: u64, max_freeze_time: i64, min_freeze_time: i64) -> Result<()> {
+        ctx.accounts.initialize_config(max_stake, max_freeze_time, min_freeze_time, &ctx.bumps)?;
+        Ok(())
     }
 }
