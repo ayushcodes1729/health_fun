@@ -4,6 +4,7 @@ use anchor_lang::prelude::*;
 #[derive(InitSpace)]
 pub struct StakeAccount {
     pub owner: Pubkey,
+    pub mint: Pubkey,
     pub staked_amount: u64,
     pub staked_at: i64,
     pub total_days: u16,
@@ -11,6 +12,7 @@ pub struct StakeAccount {
     pub days_goal_met: u16,
     pub last_day_checked: u16,
     pub goal_per_day: u32,
+    pub vault: Pubkey,
     pub bump: u8
 }
 
