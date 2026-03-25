@@ -6,3 +6,6 @@ pub use initialize_health_data::*;
 
 pub mod stake;
 pub use stake::*;
+
+pub mod update_health_data;
+pub use update_health_data::*;

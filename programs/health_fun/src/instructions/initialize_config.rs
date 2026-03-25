@@ -17,6 +17,8 @@ pub struct InitializeConfig<'info> {
         bump
     )]
     pub stake_config: Account<'info, StakeConfig>,
+
+    pub 
     
     #[account(
         mut,
@@ -34,6 +36,7 @@ impl<'info> InitializeConfig<'info> {
         max_stake: u64,
         max_freeze_time: i64,
         min_freeze_time: i64,
+        switchboard_feed: Pubkey,
         bumps: &InitializeConfigBumps,
     ) -> Result<()> {
         require_eq!(
@@ -48,6 +51,7 @@ impl<'info> InitializeConfig<'info> {
             min_freeze_time,
             treasury_bump: bumps.treasury_pda,
             bump: bumps.stake_config,
+            switchboard_feed
         });
 
         Ok(())
