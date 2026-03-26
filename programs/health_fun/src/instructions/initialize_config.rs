@@ -17,8 +17,6 @@ pub struct InitializeConfig<'info> {
         bump
     )]
     pub stake_config: Account<'info, StakeConfig>,
-
-    pub 
     
     #[account(
         mut,
