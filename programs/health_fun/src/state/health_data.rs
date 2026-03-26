@@ -9,5 +9,4 @@ pub struct HealthData {
     pub steps: u32,
     pub sleep_hours: u8,
     pub gym: bool,
-    pub last_oracle: Pubkey
 }

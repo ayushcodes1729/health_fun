@@ -25,7 +25,6 @@ impl<'info> InitializeHealthData<'info> {
         steps: u32,
         sleep_hours: u8,
         gym: bool,
-        last_oracle: Pubkey,
     ) -> Result<()> {
 
         let current_timestamp = Clock::get()?.unix_timestamp;
@@ -39,7 +38,6 @@ impl<'info> InitializeHealthData<'info> {
             steps,
             sleep_hours,
             gym,
-            last_oracle,
         });
         Ok(())
     }
