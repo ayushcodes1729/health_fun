@@ -8,5 +8,5 @@ pub struct StakeConfig {
     pub min_freeze_time: i64,
     pub treasury_bump: u8,
     pub bump: u8,
-    pub switchboard_feed: Pubkey
+    pub verification_key: Pubkey
 }
