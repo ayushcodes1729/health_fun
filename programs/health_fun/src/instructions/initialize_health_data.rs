@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
-use crate::HealthData;
+use crate::{HealthData, StakeConfig};
+use crate::error::ErrorCode;
 
 #[derive(Accounts)]
 pub struct InitializeHealthData<'info> {
@@ -16,29 +17,27 @@ pub struct InitializeHealthData<'info> {
     )]
     pub health_data: Account<'info, HealthData>,
 
+    #[account(
+        seeds = [b"config"],
+        bump
+    )]
+    pub stake_config: Account<'info, StakeConfig>,
+
     pub system_program: Program<'info, System>,
 }
 
 impl<'info> InitializeHealthData<'info> {
     pub fn initialize_health_data(
         &mut self,
-        steps: u32,
-        sleep_hours: u8,
-        gym: bool,
+        verification_key: Pubkey
     ) -> Result<()> {
 
+        require!(verification_key == self.stake_config.verification_key, ErrorCode::InvalidVerificationKeyError);
         let current_timestamp = Clock::get()?.unix_timestamp;
 
-        let epoch_day = current_timestamp.checked_div(86400).expect("Epoch day after division with 86400");
+        let epoch_day = current_timestamp.checked_div(86400).expect("Epoch day after division with 86400") as u16;
 
-        self.health_data.set_inner(HealthData {
-            user: *self.user.key,
-            last_sync_timestamp: current_timestamp,
-            epoch_day: epoch_day as u16,
-            steps,
-            sleep_hours,
-            gym,
-        });
+        self.health_data.set_inner(HealthData { user: self.user.key(), last_sync_timestamp: current_timestamp, epoch_day, steps:0,  sleep_hours: 0, gym: false, last_nonce: 0 });
         Ok(())
     }
 }
