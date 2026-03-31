@@ -34,7 +34,7 @@ impl<'info> InitializeConfig<'info> {
         max_stake: u64,
         max_freeze_time: i64,
         min_freeze_time: i64,
-        switchboard_feed: Pubkey,
+        verification_key: Pubkey,
         bumps: &InitializeConfigBumps,
     ) -> Result<()> {
         require_eq!(
@@ -48,8 +48,8 @@ impl<'info> InitializeConfig<'info> {
             max_freeze_time,
             min_freeze_time,
             treasury_bump: bumps.treasury_pda,
+            verification_key,
             bump: bumps.stake_config,
-            switchboard_feed
         });
 
         Ok(())

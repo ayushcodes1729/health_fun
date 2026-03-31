@@ -17,4 +17,31 @@ pub enum ErrorCode {
 
     #[msg("Already deposited once in stake")]
     AlreadyDepositedError,
+
+    #[msg("Invalid verification key used")]
+    InvalidVerificationKeyError,
+
+    #[msg("Current time is in the past of last sync time")]
+    StaleUpdateError,
+
+    #[msg("Attested data has invalid user key")]
+    InvalidUserError,
+
+    #[msg("Attestation data expired")]
+    AttestationExpiredError,
+
+    #[msg("Replay update of health data")]
+    ReplayUpdateError,
+
+    #[msg("Invalid epoch day in attestation")]
+    InvalidEpochError,
+
+    #[msg("Current index of sysvar instructions not found or invalid")]
+    MissingEd25519IxError,
+
+    #[msg("Invalid signature for the payload data")]
+    InvalidVerificationKeySignError,
+
+    #[msg("Invalid instruction address for signature verification")]
+    InvalidInstructionError
 }
