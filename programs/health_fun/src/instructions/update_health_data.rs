@@ -46,7 +46,8 @@ pub struct UpdateHealthData<'info> {
     )]
     pub stake_account: Account<'info, StakeAccount>,
 
-    // Instruction sysvar
+    /// CHECK: this must be the instructions sysvar account and is validated
+    /// at runtime by comparing its address to `sysvar::instructions::id()`.
     pub instructions: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,

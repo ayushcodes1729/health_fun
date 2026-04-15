@@ -19,11 +19,11 @@ pub struct InitializeConfig<'info> {
     pub stake_config: Account<'info, StakeConfig>,
     
     #[account(
-        mut,
         seeds = [b"treasury", stake_config.key().as_ref()],
         bump
     )]
-    pub treasury_pda: SystemAccount<'info>,
+    /// CHECK: this PDA is only used to derive and store its bump during config initialization.
+    pub treasury_pda: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }
