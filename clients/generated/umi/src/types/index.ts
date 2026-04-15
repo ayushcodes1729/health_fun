@@ -6,7 +6,5 @@
  * @see https://github.com/codama-idl/codama
  */
 
-export * from './healthData';
-export * from './stakeAccount';
-export * from './stakeConfig';
-export * from './treasuryConfig';
+export * from './attestationData';
+export * from './goal';

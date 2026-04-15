@@ -17,13 +17,6 @@ pub struct InitializeConfig<'info> {
         bump
     )]
     pub stake_config: Account<'info, StakeConfig>,
-    
-    #[account(
-        seeds = [b"treasury", stake_config.key().as_ref()],
-        bump
-    )]
-    /// CHECK: this PDA is only used to derive and store its bump during config initialization.
-    pub treasury_pda: UncheckedAccount<'info>,
 
     pub system_program: Program<'info, System>,
 }
@@ -47,7 +40,6 @@ impl<'info> InitializeConfig<'info> {
             max_stake,
             max_freeze_time,
             min_freeze_time,
-            treasury_bump: bumps.treasury_pda,
             verification_key,
             bump: bumps.stake_config,
         });
