@@ -43,5 +43,14 @@ pub enum ErrorCode {
     InvalidVerificationKeySignError,
 
     #[msg("Invalid instruction address for signature verification")]
-    InvalidInstructionError
+    InvalidInstructionError,
+
+    #[msg("Invalid vault pubkey for treasury")]
+    InvalidTreasuryVaultError,
+
+    #[msg("The staked challenge is already claimed")]
+    AlreadyClaimedError,
+
+    #[msg("The challenge has not completed")]
+    StakeStillLockedError,
 }

@@ -13,6 +13,8 @@ pub struct StakeAccount {
     pub last_day_checked: u16,
     pub goal_per_day: u32,
     pub vault: Pubkey,
+    pub unlock_at: i64,
+    pub claimed: bool,
     pub bump: u8
 }
 

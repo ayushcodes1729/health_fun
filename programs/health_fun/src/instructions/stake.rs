@@ -63,6 +63,7 @@ impl<'info> Stake<'info> {
     )-> Result<()> {
         require!(staked_amount<self.stake_config.max_stake, ErrorCode::MaxStakeError);
         let now = Clock::get()?.unix_timestamp;
+        let unlock_at = now + (total_days as i64 * 86400);
         let lock_period = now + ( total_days as i64 / 86400 );
         require!(self.stake_config.min_freeze_time <= lock_period && lock_period <= self.stake_config.max_freeze_time, ErrorCode::DurationOutOfRangeError);
         let last_day_checked = (now/ 86400) as u16; 
@@ -78,6 +79,8 @@ impl<'info> Stake<'info> {
             last_day_checked, 
             goal_per_day, 
             vault: self.vault.key(), 
+            unlock_at,
+            claimed: false,
             bump: bumps.stake_account 
         });
 
