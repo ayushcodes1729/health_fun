@@ -10,16 +10,16 @@ use crate::{HealthData, StakeAccount, StakeConfig};
 use crate::error::ErrorCode;
 use crate::stake_account::Goal;
 
-#[derive(Debug)]
-struct AttestationData {
-    challenge_id: u64,
-    user: Pubkey,
-    steps: u32,
-    sleep_hours: u8,
-    gym: bool,
-    epoch_day: u16,
-    nonce: u64,
-    expires_at: i64,
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
+pub struct AttestationData {
+    pub challenge_id: u64,
+    pub user: Pubkey,
+    pub steps: u32,
+    pub sleep_hours: u8,
+    pub gym: bool,
+    pub epoch_day: u16,
+    pub nonce: u64,
+    pub expires_at: i64,
 }
 
 #[derive(Accounts)]
@@ -70,7 +70,11 @@ impl <'info> UpdateHealthData<'info>{
 
         // Todo: Update health_data
         let msg = build_attestation_message(&a);
-        verify_ed25519_pvs_ix(&self.instructions.to_account_info(), &self.stake_config.verification_key, &msg);
+        verify_ed25519_pvs_ix(
+            &self.instructions.to_account_info(),
+            &self.stake_config.verification_key,
+            &msg,
+        )?;
         let epoch_day = (now / 86400) as u16;
         let goal_type = &self.stake_account.goal_type;
 

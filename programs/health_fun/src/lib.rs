@@ -9,7 +9,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("7k8STpaJxptrSVn8BLRDw1CgqGMZoU8iVUjkzHA9oCdp");
+declare_id!("DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ");
 
 #[program]
 pub mod health_fun {
@@ -23,6 +23,54 @@ pub mod health_fun {
         verification_key: Pubkey,
     ) -> Result<()> {
         ctx.accounts.initialize_config(max_stake, max_freeze_time, min_freeze_time, verification_key, &ctx.bumps)?;
+        Ok(())
+    }
+
+    pub fn initialize_health_data(
+        ctx: Context<InitializeHealthData>,
+        verification_key: Pubkey,
+    ) -> Result<()> {
+        ctx.accounts.initialize_health_data(verification_key)?;
+        Ok(())
+    }
+
+    pub fn initialize_treasury_for_mint(
+        ctx: Context<InitializeTreasuryForMint>,
+    ) -> Result<()> {
+        ctx.accounts.initialize_treasury_for_mint(&ctx.bumps)?;
+        Ok(())
+    }
+
+    pub fn stake(
+        ctx: Context<Stake>,
+        staked_amount: u64,
+        total_days: u16,
+        goal_type: Goal,
+        goal_per_day: u32,
+    ) -> Result<()> {
+        ctx.accounts
+            .init_stake(staked_amount, total_days, goal_type, goal_per_day, &ctx.bumps)?;
+        Ok(())
+    }
+
+    pub fn deposit_to_vault(
+        ctx: Context<Stake>,
+        staked_amount: u64,
+    ) -> Result<()> {
+        ctx.accounts.deposit_to_vault(staked_amount)?;
+        Ok(())
+    }
+
+    pub fn update_health_data(
+        ctx: Context<UpdateHealthData>,
+        attestation_data: AttestationData,
+    ) -> Result<()> {
+        ctx.accounts.update_health_data(attestation_data)?;
+        Ok(())
+    }
+
+    pub fn claim(ctx: Context<Claim>) -> Result<()> {
+        ctx.accounts.claim()?;
         Ok(())
     }
 }

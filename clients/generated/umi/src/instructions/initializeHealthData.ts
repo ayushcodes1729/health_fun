@@ -17,78 +17,70 @@ import {
 import {
   Serializer,
   bytes,
-  i64,
   mapSerializer,
   publicKey as publicKeySerializer,
   struct,
-  u64,
 } from '@metaplex-foundation/umi/serializers';
 import {
   ResolvedAccount,
   ResolvedAccountsWithIndices,
+  expectPublicKey,
   getAccountMetasAndSigners,
 } from '../shared';
 
 // Accounts.
-export type InitializeConfigInstructionAccounts = {
-  admin: Signer;
+export type InitializeHealthDataInstructionAccounts = {
+  user: Signer;
+  healthData?: PublicKey | Pda;
   stakeConfig?: PublicKey | Pda;
   systemProgram?: PublicKey | Pda;
 };
 
 // Data.
-export type InitializeConfigInstructionData = {
+export type InitializeHealthDataInstructionData = {
   discriminator: Uint8Array;
-  maxStake: bigint;
-  maxFreezeTime: bigint;
-  minFreezeTime: bigint;
   verificationKey: PublicKey;
 };
 
-export type InitializeConfigInstructionDataArgs = {
-  maxStake: number | bigint;
-  maxFreezeTime: number | bigint;
-  minFreezeTime: number | bigint;
+export type InitializeHealthDataInstructionDataArgs = {
   verificationKey: PublicKey;
 };
 
-export function getInitializeConfigInstructionDataSerializer(): Serializer<
-  InitializeConfigInstructionDataArgs,
-  InitializeConfigInstructionData
+export function getInitializeHealthDataInstructionDataSerializer(): Serializer<
+  InitializeHealthDataInstructionDataArgs,
+  InitializeHealthDataInstructionData
 > {
   return mapSerializer<
-    InitializeConfigInstructionDataArgs,
+    InitializeHealthDataInstructionDataArgs,
     any,
-    InitializeConfigInstructionData
+    InitializeHealthDataInstructionData
   >(
-    struct<InitializeConfigInstructionData>(
+    struct<InitializeHealthDataInstructionData>(
       [
         ['discriminator', bytes({ size: 8 })],
-        ['maxStake', u64()],
-        ['maxFreezeTime', i64()],
-        ['minFreezeTime', i64()],
         ['verificationKey', publicKeySerializer()],
       ],
-      { description: 'InitializeConfigInstructionData' }
+      { description: 'InitializeHealthDataInstructionData' }
     ),
     (value) => ({
       ...value,
-      discriminator: new Uint8Array([208, 127, 21, 1, 194, 190, 196, 70]),
+      discriminator: new Uint8Array([244, 39, 17, 219, 37, 174, 31, 103]),
     })
   ) as Serializer<
-    InitializeConfigInstructionDataArgs,
-    InitializeConfigInstructionData
+    InitializeHealthDataInstructionDataArgs,
+    InitializeHealthDataInstructionData
   >;
 }
 
 // Args.
-export type InitializeConfigInstructionArgs =
-  InitializeConfigInstructionDataArgs;
+export type InitializeHealthDataInstructionArgs =
+  InitializeHealthDataInstructionDataArgs;
 
 // Instruction.
-export function initializeConfig(
+export function initializeHealthData(
   context: Pick<Context, 'eddsa' | 'programs'>,
-  input: InitializeConfigInstructionAccounts & InitializeConfigInstructionArgs
+  input: InitializeHealthDataInstructionAccounts &
+    InitializeHealthDataInstructionArgs
 ): TransactionBuilder {
   // Program ID.
   const programId = context.programs.getPublicKey(
@@ -98,27 +90,36 @@ export function initializeConfig(
 
   // Accounts.
   const resolvedAccounts = {
-    admin: {
-      index: 0,
-      isWritable: true as boolean,
-      value: input.admin ?? null,
-    },
-    stakeConfig: {
+    user: { index: 0, isWritable: true as boolean, value: input.user ?? null },
+    healthData: {
       index: 1,
       isWritable: true as boolean,
+      value: input.healthData ?? null,
+    },
+    stakeConfig: {
+      index: 2,
+      isWritable: false as boolean,
       value: input.stakeConfig ?? null,
     },
     systemProgram: {
-      index: 2,
+      index: 3,
       isWritable: false as boolean,
       value: input.systemProgram ?? null,
     },
   } satisfies ResolvedAccountsWithIndices;
 
   // Arguments.
-  const resolvedArgs: InitializeConfigInstructionArgs = { ...input };
+  const resolvedArgs: InitializeHealthDataInstructionArgs = { ...input };
 
   // Default values.
+  if (!resolvedAccounts.healthData.value) {
+    resolvedAccounts.healthData.value = context.eddsa.findPda(programId, [
+      bytes().serialize(new Uint8Array([104, 101, 97, 108, 116, 104])),
+      publicKeySerializer().serialize(
+        expectPublicKey(resolvedAccounts.user.value)
+      ),
+    ]);
+  }
   if (!resolvedAccounts.stakeConfig.value) {
     resolvedAccounts.stakeConfig.value = context.eddsa.findPda(programId, [
       bytes().serialize(new Uint8Array([99, 111, 110, 102, 105, 103])),
@@ -145,8 +146,8 @@ export function initializeConfig(
   );
 
   // Data.
-  const data = getInitializeConfigInstructionDataSerializer().serialize(
-    resolvedArgs as InitializeConfigInstructionDataArgs
+  const data = getInitializeHealthDataInstructionDataSerializer().serialize(
+    resolvedArgs as InitializeHealthDataInstructionDataArgs
   );
 
   // Bytes Created On Chain.

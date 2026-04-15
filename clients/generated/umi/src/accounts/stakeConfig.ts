@@ -37,7 +37,6 @@ export type StakeConfigAccountData = {
   maxStake: bigint;
   maxFreezeTime: bigint;
   minFreezeTime: bigint;
-  treasuryBump: number;
   bump: number;
   verificationKey: PublicKey;
 };
@@ -46,7 +45,6 @@ export type StakeConfigAccountDataArgs = {
   maxStake: number | bigint;
   maxFreezeTime: number | bigint;
   minFreezeTime: number | bigint;
-  treasuryBump: number;
   bump: number;
   verificationKey: PublicKey;
 };
@@ -62,7 +60,6 @@ export function getStakeConfigAccountDataSerializer(): Serializer<
         ['maxStake', u64()],
         ['maxFreezeTime', i64()],
         ['minFreezeTime', i64()],
-        ['treasuryBump', u8()],
         ['bump', u8()],
         ['verificationKey', publicKeySerializer()],
       ],
@@ -138,7 +135,7 @@ export function getStakeConfigGpaBuilder(
 ) {
   const programId = context.programs.getPublicKey(
     'healthFun',
-    '7k8STpaJxptrSVn8BLRDw1CgqGMZoU8iVUjkzHA9oCdp'
+    'DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ'
   );
   return gpaBuilder(context, programId)
     .registerFields<{
@@ -146,7 +143,6 @@ export function getStakeConfigGpaBuilder(
       maxStake: number | bigint;
       maxFreezeTime: number | bigint;
       minFreezeTime: number | bigint;
-      treasuryBump: number;
       bump: number;
       verificationKey: PublicKey;
     }>({
@@ -154,9 +150,8 @@ export function getStakeConfigGpaBuilder(
       maxStake: [8, u64()],
       maxFreezeTime: [16, i64()],
       minFreezeTime: [24, i64()],
-      treasuryBump: [32, u8()],
-      bump: [33, u8()],
-      verificationKey: [34, publicKeySerializer()],
+      bump: [32, u8()],
+      verificationKey: [33, publicKeySerializer()],
     })
     .deserializeUsing<StakeConfig>((account) => deserializeStakeConfig(account))
     .whereField(
