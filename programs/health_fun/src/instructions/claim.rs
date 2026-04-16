@@ -3,7 +3,7 @@ use anchor_spl::token_interface::{
     transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked
 };
 
-use crate::{StakeAccount, StakeConfig, TreasuryConfig};
+use crate::{StakeAccount, TreasuryConfig};
 use crate::error::ErrorCode;
 
 #[derive(Accounts)]
@@ -18,28 +18,28 @@ pub struct Claim<'info> {
         constraint = stake_account.owner == user.key() @ ErrorCode::InvalidStakeOwnerError,
         has_one = mint
     )]
-    pub stake_account: Account<'info, StakeAccount>,
+    pub stake_account: Box<Account<'info, StakeAccount>>,
 
     #[account(
         seeds = [b"config"],
-        bump = stake_config.bump
+        bump
     )]
-    pub stake_config: Account<'info, StakeConfig>,
+    /// CHECK: Config PDA is validated by seeds only and not used in claim logic.
+    pub stake_config: UncheckedAccount<'info>,
 
     #[account(
         seeds = [b"treasury_config", mint.key().as_ref()],
         bump = treasury_config.bump,
-        has_one = mint,
-        has_one = vault @ ErrorCode::InvalidTreasuryVaultError
+        has_one = mint
     )]
-    pub treasury_config: Account<'info, TreasuryConfig>,
+    pub treasury_config: Box<Account<'info, TreasuryConfig>>,
 
     #[account(
         mut,
         seeds = [b"vault", user.key().as_ref()],
         bump
     )]
-    pub vault: InterfaceAccount<'info, TokenAccount>,
+    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         seeds = [b"treasury_authority", mint.key().as_ref()],
@@ -49,28 +49,33 @@ pub struct Claim<'info> {
     pub treasury_authority: UncheckedAccount<'info>,
 
     #[account(
-        mut,
-        constraint = treasury_vault.key() == treasury_config.vault @ ErrorCode::InvalidTreasuryVaultError
+        mut
     )]
-    pub treasury_vault: InterfaceAccount<'info, TokenAccount>,
+    pub treasury_vault: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
         associated_token::mint = mint,
         associated_token::authority = user
     )]
-    pub user_ata: InterfaceAccount<'info, TokenAccount>,
+    pub user_ata: Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mint::token_program = token_program
     )]
-    pub mint: InterfaceAccount<'info, Mint>,
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub token_program: Interface<'info, TokenInterface>,
 }
 
 impl<'info> Claim<'info> {
     pub fn claim(&mut self) -> Result<()> {
+        require_keys_eq!(
+            self.treasury_vault.key(),
+            self.treasury_config.vault,
+            ErrorCode::InvalidTreasuryVaultError
+        );
+
         require!(!self.stake_account.claimed, ErrorCode::AlreadyClaimedError);
 
         let now = Clock::get()?.unix_timestamp;

@@ -5,11 +5,11 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-health_fun = "DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ"
-
 [programs.devnet]
 health_fun = "DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ"
+
+[programs.localnet]
+health_fun = "AurTvci86g6Wx95U93zQtonzV3CwHq7Ehpw9chS1oqCa"
 
 [registry]
 url = "https://api.apr.dev"

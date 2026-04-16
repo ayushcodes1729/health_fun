@@ -18,7 +18,7 @@ import {
 } from '../errors';
 
 export const HEALTH_FUN_PROGRAM_ID =
-  'DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ' as PublicKey<'DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ'>;
+  'AurTvci86g6Wx95U93zQtonzV3CwHq7Ehpw9chS1oqCa' as PublicKey<'AurTvci86g6Wx95U93zQtonzV3CwHq7Ehpw9chS1oqCa'>;
 
 export function createHealthFunProgram(): Program {
   return {

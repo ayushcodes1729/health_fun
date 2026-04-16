@@ -92,7 +92,7 @@ export function updateHealthData(
   // Program ID.
   const programId = context.programs.getPublicKey(
     'healthFun',
-    'DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ'
+    'AurTvci86g6Wx95U93zQtonzV3CwHq7Ehpw9chS1oqCa'
   );
 
   // Accounts.

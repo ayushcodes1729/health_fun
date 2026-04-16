@@ -9,7 +9,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ");
+declare_id!("AurTvci86g6Wx95U93zQtonzV3CwHq7Ehpw9chS1oqCa");
 
 #[program]
 pub mod health_fun {

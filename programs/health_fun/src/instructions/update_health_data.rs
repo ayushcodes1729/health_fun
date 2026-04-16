@@ -125,7 +125,8 @@ fn verify_ed25519_pvs_ix(
     verification_key: &Pubkey,
     expected_messages: &[u8]
 ) -> Result<()> {
-    let current = load_current_index_checked(ix_sysvar)? as usize;
+    let current = load_current_index_checked(ix_sysvar).unwrap();
+    let current = current as usize;
     require!(current > 0, ErrorCode::MissingEd25519IxError);
 
     let prev_ix = load_instruction_at_checked(current -1, ix_sysvar)?;
