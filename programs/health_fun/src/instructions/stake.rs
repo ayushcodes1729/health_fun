@@ -52,6 +52,56 @@ pub struct Stake<'info>{
     pub system_program: Program<'info, System>
 }
 
+/// Deposit needs its own context. Reusing `Stake` meant inheriting its `init`
+/// constraints, which run during account validation and try to re-create the
+/// stake account and vault that `stake` already made — so the instruction could
+/// never be called successfully.
+#[derive(Accounts)]
+pub struct DepositToVault<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"stake", user.key().as_ref()],
+        bump = stake_account.bump,
+        has_one = mint,
+        constraint = stake_account.owner == user.key() @ ErrorCode::InvalidStakeOwnerError
+    )]
+    pub stake_account: Account<'info, StakeAccount>,
+
+    #[account(
+        seeds = [b"config"],
+        bump = stake_config.bump
+    )]
+    pub stake_config: Account<'info, StakeConfig>,
+
+    #[account(
+        mint::token_program = token_program
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        mut,
+        seeds = [b"vault", user.key().as_ref()],
+        bump,
+        token::mint = mint,
+        token::authority = stake_account
+    )]
+    pub vault: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = mint,
+        associated_token::authority = user
+    )]
+    pub user_ata: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+
+    pub system_program: Program<'info, System>
+}
+
 impl<'info> Stake<'info> {
     pub fn init_stake(
         &mut self,
@@ -64,7 +114,11 @@ impl<'info> Stake<'info> {
         require!(staked_amount<self.stake_config.max_stake, ErrorCode::MaxStakeError);
         let now = Clock::get()?.unix_timestamp;
         let unlock_at = now + (total_days as i64 * 86400);
-        let lock_period = now + ( total_days as i64 / 86400 );
+
+        // Range-check the lock *duration*. This previously computed
+        // `now + total_days / 86400`, which is just `now` for any realistic
+        // total_days, so the bounds could never reject anything.
+        let lock_period = total_days as i64 * 86400;
         require!(self.stake_config.min_freeze_time <= lock_period && lock_period <= self.stake_config.max_freeze_time, ErrorCode::DurationOutOfRangeError);
         let last_day_checked = (now/ 86400) as u16; 
 
@@ -86,11 +140,17 @@ impl<'info> Stake<'info> {
 
         Ok(())
     }
+}
 
+impl<'info> DepositToVault<'info> {
     pub fn deposit_to_vault(&mut self, staked_amount: u64) -> Result<()> {
 
-        require!(self.stake_account.owner == self.user.key(), ErrorCode::InvalidStakeOwnerError);
         require!(self.stake_account.staked_amount == 0, ErrorCode::AlreadyDepositedError);
+
+        // Enforce the configured cap against the amount actually being moved.
+        // Checking it in `stake` only validated an argument that had no
+        // connection to what ended up in the vault.
+        require!(staked_amount < self.stake_config.max_stake, ErrorCode::MaxStakeError);
 
         let now = Clock::get()?.unix_timestamp;
         let last_day_checked = (now/ 86400) as u16; 

@@ -54,7 +54,7 @@ pub mod health_fun {
     }
 
     pub fn deposit_to_vault(
-        ctx: Context<Stake>,
+        ctx: Context<DepositToVault>,
         staked_amount: u64,
     ) -> Result<()> {
         ctx.accounts.deposit_to_vault(staked_amount)?;

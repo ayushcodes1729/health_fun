@@ -29,6 +29,7 @@ pub struct UpdateHealthData<'info> {
     pub user: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [b"health" , user.key().as_ref()],
         bump
     )]
@@ -41,6 +42,7 @@ pub struct UpdateHealthData<'info> {
     pub stake_config: Account<'info, StakeConfig>,
 
     #[account(
+        mut,
         seeds = [b"stake", user.key().as_ref()],
         bump
     )]
@@ -68,14 +70,19 @@ impl <'info> UpdateHealthData<'info>{
         require!(a.nonce > self.health_data.last_nonce, ErrorCode::ReplayUpdateError);
 
 
-        // Todo: Update health_data
         let msg = build_attestation_message(&a);
         verify_ed25519_pvs_ix(
             &self.instructions.to_account_info(),
             &self.stake_config.verification_key,
             &msg,
         )?;
-        let epoch_day = (now / 86400) as u16;
+
+        // Use the day the oracle attested to, not the day the transaction happens
+        // to land. The signature covers `a.epoch_day`, and the checks above already
+        // require it to move strictly forward, so it is the trustworthy value.
+        // Deriving it from the clock instead would collapse every submission made
+        // within one wall-clock day into a single counted day.
+        let epoch_day = a.epoch_day;
         let goal_type = &self.stake_account.goal_type;
 
         self.health_data.user = a.user;

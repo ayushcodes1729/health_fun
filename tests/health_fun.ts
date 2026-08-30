@@ -1,6 +1,10 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, web3 } from "@coral-xyz/anchor";
-import { expect } from "chai";
+import { config as chaiConfig, expect } from "chai";
+
+// Show full error text on assertion failures; the default 40-char truncation
+// hides the on-chain program logs that explain why a transaction failed.
+chaiConfig.truncateThreshold = 0;
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
@@ -11,16 +15,18 @@ import {
   getOrCreateAssociatedTokenAccount,
   mintTo,
 } from "@solana/spl-token";
-import nacl from "tweetnacl";
 
 import { HealthFun } from "../target/types/health_fun";
+import {
+  INSTRUCTIONS_SYSVAR,
+  buildAttestationMessage,
+  findStakeConfigPda,
+  findTreasuryAuthorityPda,
+  findTreasuryConfigPda,
+  findUserPdas,
+  makeEd25519VerifyIx,
+} from "./helpers/attestation";
 
-const INSTRUCTIONS_SYSVAR = new web3.PublicKey(
-  "Sysvar1nstructions1111111111111111111111111"
-);
-const ED25519_PROGRAM_ID = new web3.PublicKey(
-  "Ed25519SigVerify111111111111111111111111111"
-);
 
 const INIT_CONFIG = {
   maxStake: new anchor.BN(1_000_000_000),
@@ -69,6 +75,34 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Reads the validator's own clock. `update_health_data` requires
+// `now > health_data.last_sync_timestamp`, and the cluster clock drifts from
+// wall-clock time, so sleeping a fixed number of milliseconds between updates
+// races it and intermittently throws StaleUpdateError.
+async function getChainUnixTimestamp(ctx: Ctx): Promise<number> {
+  const clockAccount = await ctx.provider.connection.getAccountInfo(
+    web3.SYSVAR_CLOCK_PUBKEY,
+    "confirmed"
+  );
+
+  if (!clockAccount) {
+    throw new Error("Clock sysvar account not found");
+  }
+
+  // Clock layout: slot(u64) epoch_start_timestamp(i64) epoch(u64)
+  // leader_schedule_epoch(u64) unix_timestamp(i64)
+  return Number(clockAccount.data.readBigInt64LE(32));
+}
+
+async function waitForChainTimeAfter(ctx: Ctx, timestamp: number) {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if ((await getChainUnixTimestamp(ctx)) > timestamp) return;
+    await sleep(500);
+  }
+
+  throw new Error(`Cluster clock did not advance past ${timestamp}`);
+}
+
 async function withBlockhashRetry<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
@@ -90,35 +124,10 @@ async function expectErrorContains(p: Promise<unknown>, msg: string) {
   }
 }
 
-function findStakeConfigPda(programId: web3.PublicKey): web3.PublicKey {
-  return web3.PublicKey.findProgramAddressSync([Buffer.from("config")], programId)[0];
-}
-
-function findUserPdas(programId: web3.PublicKey, user: web3.PublicKey) {
-  const stakePda = web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("stake"), user.toBuffer()],
-    programId
-  )[0];
-  const vaultPda = web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("vault"), user.toBuffer()],
-    programId
-  )[0];
-  const healthPda = web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("health"), user.toBuffer()],
-    programId
-  )[0];
-  return { stakePda, vaultPda, healthPda };
-}
 
 function findTreasuryPdas(programId: web3.PublicKey, mint: web3.PublicKey) {
-  const treasuryConfigPda = web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("treasury_config"), mint.toBuffer()],
-    programId
-  )[0];
-  const treasuryAuthorityPda = web3.PublicKey.findProgramAddressSync(
-    [Buffer.from("treasury_authority"), mint.toBuffer()],
-    programId
-  )[0];
+  const treasuryConfigPda = findTreasuryConfigPda(programId, mint);
+  const treasuryAuthorityPda = findTreasuryAuthorityPda(programId, mint);
   const treasuryVault = getAssociatedTokenAddressSync(
     mint,
     treasuryAuthorityPda,
@@ -133,8 +142,21 @@ async function fundUser(ctx: Ctx, user: web3.PublicKey) {
   const bal = await ctx.provider.connection.getBalance(user, "confirmed");
   if (bal >= USER_FUNDING) return;
 
-  await ctx.provider.connection.requestAirdrop(user, USER_FUNDING - bal);
-  await sleep(300);
+  const signature = await ctx.provider.connection.requestAirdrop(
+    user,
+    USER_FUNDING - bal
+  );
+
+  // Wait for the airdrop to actually land. A bare sleep races the validator and
+  // leaves the account at 0 lamports, which surfaces as a confusing
+  // "insufficient lamports" failure inside whatever instruction runs next.
+  const latestBlockhash = await ctx.provider.connection.getLatestBlockhash(
+    "confirmed"
+  );
+  await ctx.provider.connection.confirmTransaction(
+    { signature, ...latestBlockhash },
+    "confirmed"
+  );
 }
 
 async function initializeConfigIfNeeded(ctx: Ctx) {
@@ -281,6 +303,27 @@ async function initializeStake(ctx: Ctx, c: Challenge, totalDays: number) {
   );
 }
 
+async function depositToVault(ctx: Ctx, c: Challenge, amount: anchor.BN) {
+  await withBlockhashRetry(() =>
+    ctx.program.methods
+      .depositToVault(amount)
+      .accountsStrict({
+        user: c.user.publicKey,
+        stakeAccount: c.stakePda,
+        stakeConfig: ctx.stakeConfigPda,
+        mint: c.mint,
+        vault: c.vaultPda,
+        userAta: c.userAta,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: web3.SystemProgram.programId,
+      })
+      .signers([c.user])
+      .rpc({ commitment: "confirmed" })
+  );
+}
+
+// Moves tokens into the vault without going through the program. Kept only for
+// tests that deliberately bypass `deposit_to_vault`.
 async function transferIntoVaultDirectly(ctx: Ctx, c: Challenge, amount: anchor.BN) {
   const ix = createTransferCheckedInstruction(
     c.userAta,
@@ -302,73 +345,6 @@ async function transferIntoVaultDirectly(ctx: Ctx, c: Challenge, amount: anchor.
   );
 }
 
-function buildAttestationMessage(params: {
-  challengeId: anchor.BN;
-  user: web3.PublicKey;
-  steps: number;
-  sleepHours: number;
-  gym: boolean;
-  epochDay: number;
-  nonce: anchor.BN;
-  expiresAt: anchor.BN;
-}): Buffer {
-  const buf = Buffer.alloc(9 + 32 + 8 + 2 + 4 + 1 + 1 + 8 + 8);
-  let o = 0;
-
-  buf.write("HEALTH_V1", o, "ascii");
-  o += 9;
-  params.user.toBuffer().copy(buf, o);
-  o += 32;
-  buf.writeBigUInt64LE(toU64(params.challengeId), o);
-  o += 8;
-  buf.writeUInt16LE(params.epochDay, o);
-  o += 2;
-  buf.writeUInt32LE(params.steps, o);
-  o += 4;
-  buf.writeUInt8(params.sleepHours, o);
-  o += 1;
-  buf.writeUInt8(params.gym ? 1 : 0, o);
-  o += 1;
-  buf.writeBigUInt64LE(toU64(params.nonce), o);
-  o += 8;
-  buf.writeBigInt64LE(BigInt(params.expiresAt.toString()), o);
-
-  return buf;
-}
-
-function buildEd25519IxData(signature: Uint8Array, publicKey: Uint8Array, message: Buffer): Buffer {
-  const SIG_OFF = 16;
-  const PK_OFF = SIG_OFF + 64;
-  const MSG_OFF = PK_OFF + 32;
-
-  const buf = Buffer.alloc(MSG_OFF + message.length);
-
-  buf.writeUInt8(1, 0);
-  buf.writeUInt8(0, 1);
-  buf.writeUInt16LE(SIG_OFF, 2);
-  buf.writeUInt16LE(0xffff, 4);
-  buf.writeUInt16LE(PK_OFF, 6);
-  buf.writeUInt16LE(0xffff, 8);
-  buf.writeUInt16LE(MSG_OFF, 10);
-  buf.writeUInt16LE(message.length, 12);
-  buf.writeUInt16LE(0xffff, 14);
-
-  Buffer.from(signature).copy(buf, SIG_OFF);
-  Buffer.from(publicKey).copy(buf, PK_OFF);
-  message.copy(buf, MSG_OFF);
-
-  return buf;
-}
-
-function makeEd25519VerifyIx(oracle: web3.Keypair, message: Buffer): web3.TransactionInstruction {
-  const sig = nacl.sign.detached(message, oracle.secretKey);
-  const data = buildEd25519IxData(sig, oracle.publicKey.toBytes(), message);
-  return new web3.TransactionInstruction({
-    programId: ED25519_PROGRAM_ID,
-    keys: [],
-    data,
-  });
-}
 
 async function sendUpdateWithEd25519(
   ctx: Ctx,
@@ -496,13 +472,57 @@ describe("health_fun - web3.js only tests", () => {
       );
     });
 
+    it("persists health data and goal progress across days", async () => {
+      await initializeConfigIfNeeded(ctx);
+      const c = await createChallenge(ctx, 300_000);
+      await initializeTreasury(ctx, c);
+      await initializeHealth(ctx, c);
+      await initializeStake(ctx, c, 3);
+      await depositToVault(ctx, c, STAKE_AMOUNT);
+
+      const baseEpochDay = currentEpochDay();
+      const stakeBefore = await ctx.program.account.stakeAccount.fetch(c.stakePda);
+      const startingDaysMet = stakeBefore.daysGoalMet;
+
+      // Three consecutive attested days, each clearing the 5000-step goal.
+      for (let day = 1; day <= 3; day += 1) {
+        const health = await ctx.program.account.healthData.fetch(c.healthPda);
+        await waitForChainTimeAfter(ctx, health.lastSyncTimestamp.toNumber());
+
+        await sendUpdateWithEd25519(ctx, c, ctx.admin, {
+          challengeId: new anchor.BN(100 + day),
+          user: c.user.publicKey,
+          steps: 7_500,
+          sleepHours: 8,
+          gym: true,
+          epochDay: baseEpochDay + day,
+          nonce: new anchor.BN(day),
+          expiresAt: new anchor.BN(Math.floor(Date.now() / 1000) + 120),
+        });
+      }
+
+      const health = await ctx.program.account.healthData.fetch(c.healthPda);
+      const stakeAfter = await ctx.program.account.stakeAccount.fetch(c.stakePda);
+
+      // The oracle's attested values must actually be written to the account.
+      expect(health.steps).to.equal(7_500);
+      expect(health.sleepHours).to.equal(8);
+      expect(health.gym).to.equal(true);
+      expect(health.lastNonce.toString()).to.equal("3");
+      expect(health.epochDay).to.equal(baseEpochDay + 3);
+
+      // And each attested day must advance goal progress exactly once.
+      expect(stakeAfter.daysGoalMet - startingDaysMet).to.equal(3);
+      expect(stakeAfter.lastDayChecked).to.equal(baseEpochDay + 3);
+    });
+
     it("complete reward flow: stake -> update goal met -> claim to user", async () => {
       await initializeConfigIfNeeded(ctx);
       const c = await createChallenge(ctx, 300_000);
       await initializeTreasury(ctx, c);
       await initializeHealth(ctx, c);
       await initializeStake(ctx, c, 0);
-      await transferIntoVaultDirectly(ctx, c, STAKE_AMOUNT);
+      await depositToVault(ctx, c, STAKE_AMOUNT);
 
       await sleep(1100);
       await sendUpdateWithEd25519(ctx, c, ctx.admin, {
@@ -562,7 +582,7 @@ describe("health_fun - web3.js only tests", () => {
       await initializeTreasury(ctx, c);
       await initializeHealth(ctx, c);
       await initializeStake(ctx, c, 1);
-      await transferIntoVaultDirectly(ctx, c, STAKE_AMOUNT);
+      await depositToVault(ctx, c, STAKE_AMOUNT);
 
       await expectErrorContains(
         withBlockhashRetry(() =>
@@ -593,7 +613,7 @@ describe("health_fun - web3.js only tests", () => {
       await initializeTreasury(ctx, c);
       await initializeHealth(ctx, c);
       await initializeStake(ctx, c, 0);
-      await transferIntoVaultDirectly(ctx, c, STAKE_AMOUNT);
+      await depositToVault(ctx, c, STAKE_AMOUNT);
 
       const base = {
         challengeId: new anchor.BN(3),
@@ -625,7 +645,7 @@ describe("health_fun - web3.js only tests", () => {
       await initializeTreasury(ctx, c);
       await initializeHealth(ctx, c);
       await initializeStake(ctx, c, 0);
-      await transferIntoVaultDirectly(ctx, c, STAKE_AMOUNT);
+      await depositToVault(ctx, c, STAKE_AMOUNT);
 
       const badOracle = web3.Keypair.generate();
       await sleep(1100);
@@ -650,7 +670,7 @@ describe("health_fun - web3.js only tests", () => {
       await initializeTreasury(ctx, c);
       await initializeHealth(ctx, c);
       await initializeStake(ctx, c, 0);
-      await transferIntoVaultDirectly(ctx, c, STAKE_AMOUNT);
+      await depositToVault(ctx, c, STAKE_AMOUNT);
 
       await sleep(1100);
       await expectErrorContains(
