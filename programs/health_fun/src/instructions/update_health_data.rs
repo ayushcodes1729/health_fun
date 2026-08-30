@@ -107,7 +107,17 @@ impl <'info> UpdateHealthData<'info>{
         self.health_data.gym = a.gym;
         self.health_data.last_nonce = a.nonce;
 
-        if epoch_day > self.stake_account.last_day_checked {
+        // Only days inside the challenge window count toward the goal. Health
+        // data is still recorded above for any attested day, but without this
+        // bound a user who missed a day could keep attesting past `unlock_at`
+        // until enough good days accumulated and then claim a win — turning
+        // "meet the goal every day for N days" into "meet it on any N days,
+        // eventually", so the forfeit branch would almost never fire.
+        let challenge_last_day = (self.stake_account.unlock_at / 86400) as u16;
+
+        if epoch_day > self.stake_account.last_day_checked
+            && epoch_day <= challenge_last_day
+        {
             match goal_type {
                 Goal::Gym => {
                     if a.gym  {self.stake_account.days_goal_met += 1};

@@ -652,6 +652,45 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
     ).to.throw(/DurationOutOfRange/i);
   });
 
+  it("does not count days attested after the challenge window closed", () => {
+    const w = setupWorld();
+
+    // Days 1 and 2 met, day 3 missed -> the challenge is lost on its own terms.
+    const stepsByDay = [7_500, 7_500, 2_000];
+    for (let day = 1; day <= TOTAL_DAYS; day += 1) {
+      attestDay(w, {
+        day,
+        steps: stepsByDay[day - 1],
+        timestamp: START_TIMESTAMP + day * 86400,
+      });
+    }
+
+    // Day 4 is past unlock_at. Counting it would let a user who missed a day
+    // simply keep going until enough good days accumulate, then claim a win.
+    attestDay(w, {
+      day: TOTAL_DAYS + 1,
+      steps: 7_500,
+      timestamp: START_TIMESTAMP + (TOTAL_DAYS + 1) * 86400,
+    });
+
+    const decoded = w.program.coder.accounts.decode(
+      "stakeAccount",
+      Buffer.from(w.svm.getAccount(w.stakePda)!.data)
+    );
+    expect(decoded.daysGoalMet).to.equal(TOTAL_DAYS - 1);
+
+    const userBefore = tokenBalance(w.svm, w.userAta);
+    const treasuryBefore = tokenBalance(w.svm, w.treasuryVault);
+
+    setClock(w.svm, START_TIMESTAMP + (TOTAL_DAYS + 2) * 86400);
+    claim(w);
+
+    expect(tokenBalance(w.svm, w.treasuryVault)).to.equal(
+      treasuryBefore + BigInt(STAKE_AMOUNT)
+    );
+    expect(tokenBalance(w.svm, w.userAta)).to.equal(userBefore);
+  });
+
   it("rejects a second claim", () => {
     const w = setupWorld();
 
