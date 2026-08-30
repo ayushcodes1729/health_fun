@@ -17,6 +17,11 @@ pub struct AttestationData {
     pub steps: u32,
     pub sleep_hours: u8,
     pub gym: bool,
+    /// Whole days since the Unix epoch, i.e. `unix_timestamp / 86400`.
+    /// The oracle MUST use this numbering: it is compared directly against
+    /// `stake_account.last_day_checked`, which the program derives from the
+    /// chain clock. Any other scheme (days since challenge start, a calendar
+    /// ordinal) silently stops goal progress from ever accruing.
     pub epoch_day: u16,
     pub nonce: u64,
     pub expires_at: i64,
@@ -29,6 +34,7 @@ pub struct UpdateHealthData<'info> {
     pub user: Signer<'info>,
 
     #[account(
+        mut,
         seeds = [b"health" , user.key().as_ref()],
         bump
     )]
@@ -41,6 +47,7 @@ pub struct UpdateHealthData<'info> {
     pub stake_config: Account<'info, StakeConfig>,
 
     #[account(
+        mut,
         seeds = [b"stake", user.key().as_ref()],
         bump
     )]
@@ -63,19 +70,33 @@ impl <'info> UpdateHealthData<'info>{
         require!(now <= a.expires_at, ErrorCode::AttestationExpiredError);
         require!(now > self.health_data.last_sync_timestamp, ErrorCode::StaleUpdateError);
         require!(a.epoch_day > self.health_data.epoch_day, ErrorCode::InvalidEpochError);
+
+        // Bound the attested day by the chain clock. Without this an attestation
+        // carrying u16::MAX would set health_data.epoch_day to a value no later
+        // attestation could exceed, permanently freezing the account, and a
+        // whole challenge could be attested in seconds.
+        require!(
+            a.epoch_day <= (now / 86400) as u16,
+            ErrorCode::FutureEpochError
+        );
         
         // stops any replay of update data instructions
         require!(a.nonce > self.health_data.last_nonce, ErrorCode::ReplayUpdateError);
 
 
-        // Todo: Update health_data
         let msg = build_attestation_message(&a);
         verify_ed25519_pvs_ix(
             &self.instructions.to_account_info(),
             &self.stake_config.verification_key,
             &msg,
         )?;
-        let epoch_day = (now / 86400) as u16;
+
+        // Use the day the oracle attested to, not the day the transaction happens
+        // to land. The signature covers `a.epoch_day`, and the checks above already
+        // require it to move strictly forward, so it is the trustworthy value.
+        // Deriving it from the clock instead would collapse every submission made
+        // within one wall-clock day into a single counted day.
+        let epoch_day = a.epoch_day;
         let goal_type = &self.stake_account.goal_type;
 
         self.health_data.user = a.user;
@@ -86,7 +107,17 @@ impl <'info> UpdateHealthData<'info>{
         self.health_data.gym = a.gym;
         self.health_data.last_nonce = a.nonce;
 
-        if epoch_day > self.stake_account.last_day_checked {
+        // Only days inside the challenge window count toward the goal. Health
+        // data is still recorded above for any attested day, but without this
+        // bound a user who missed a day could keep attesting past `unlock_at`
+        // until enough good days accumulated and then claim a win — turning
+        // "meet the goal every day for N days" into "meet it on any N days,
+        // eventually", so the forfeit branch would almost never fire.
+        let challenge_last_day = (self.stake_account.unlock_at / 86400) as u16;
+
+        if epoch_day > self.stake_account.last_day_checked
+            && epoch_day <= challenge_last_day
+        {
             match goal_type {
                 Goal::Gym => {
                     if a.gym  {self.stake_account.days_goal_met += 1};

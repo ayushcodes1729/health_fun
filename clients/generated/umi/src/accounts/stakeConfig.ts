@@ -35,16 +35,26 @@ export type StakeConfig = Account<StakeConfigAccountData>;
 export type StakeConfigAccountData = {
   discriminator: Uint8Array;
   maxStake: bigint;
-  maxFreezeTime: bigint;
-  minFreezeTime: bigint;
+  /**
+   * Longest permitted challenge, as a DURATION IN SECONDS (not a timestamp).
+   * e.g. a 90-day maximum is 90 * 86400 = 7_776_000.
+   */
+  maxLockDuration: bigint;
+  /** Shortest permitted challenge, as a DURATION IN SECONDS (not a timestamp). */
+  minLockDuration: bigint;
   bump: number;
   verificationKey: PublicKey;
 };
 
 export type StakeConfigAccountDataArgs = {
   maxStake: number | bigint;
-  maxFreezeTime: number | bigint;
-  minFreezeTime: number | bigint;
+  /**
+   * Longest permitted challenge, as a DURATION IN SECONDS (not a timestamp).
+   * e.g. a 90-day maximum is 90 * 86400 = 7_776_000.
+   */
+  maxLockDuration: number | bigint;
+  /** Shortest permitted challenge, as a DURATION IN SECONDS (not a timestamp). */
+  minLockDuration: number | bigint;
   bump: number;
   verificationKey: PublicKey;
 };
@@ -58,8 +68,8 @@ export function getStakeConfigAccountDataSerializer(): Serializer<
       [
         ['discriminator', bytes({ size: 8 })],
         ['maxStake', u64()],
-        ['maxFreezeTime', i64()],
-        ['minFreezeTime', i64()],
+        ['maxLockDuration', i64()],
+        ['minLockDuration', i64()],
         ['bump', u8()],
         ['verificationKey', publicKeySerializer()],
       ],
@@ -141,15 +151,15 @@ export function getStakeConfigGpaBuilder(
     .registerFields<{
       discriminator: Uint8Array;
       maxStake: number | bigint;
-      maxFreezeTime: number | bigint;
-      minFreezeTime: number | bigint;
+      maxLockDuration: number | bigint;
+      minLockDuration: number | bigint;
       bump: number;
       verificationKey: PublicKey;
     }>({
       discriminator: [0, bytes({ size: 8 })],
       maxStake: [8, u64()],
-      maxFreezeTime: [16, i64()],
-      minFreezeTime: [24, i64()],
+      maxLockDuration: [16, i64()],
+      minLockDuration: [24, i64()],
       bump: [32, u8()],
       verificationKey: [33, publicKeySerializer()],
     })

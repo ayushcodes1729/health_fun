@@ -100,7 +100,7 @@ export function updateHealthData(
     user: { index: 0, isWritable: true as boolean, value: input.user ?? null },
     healthData: {
       index: 1,
-      isWritable: false as boolean,
+      isWritable: true as boolean,
       value: input.healthData ?? null,
     },
     stakeConfig: {
@@ -110,7 +110,7 @@ export function updateHealthData(
     },
     stakeAccount: {
       index: 3,
-      isWritable: false as boolean,
+      isWritable: true as boolean,
       value: input.stakeAccount ?? null,
     },
     instructions: {

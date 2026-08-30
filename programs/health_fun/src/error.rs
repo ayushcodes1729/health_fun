@@ -15,9 +15,6 @@ pub enum ErrorCode {
     #[msg("Stake owner is invalid")]
     InvalidStakeOwnerError,
 
-    #[msg("Already deposited once in stake")]
-    AlreadyDepositedError,
-
     #[msg("Invalid verification key used")]
     InvalidVerificationKeyError,
 
@@ -53,4 +50,10 @@ pub enum ErrorCode {
 
     #[msg("The challenge has not completed")]
     StakeStillLockedError,
+
+    #[msg("Attested epoch day is in the future")]
+    FutureEpochError,
+
+    #[msg("Stake amount must be greater than zero")]
+    ZeroStakeError,
 }

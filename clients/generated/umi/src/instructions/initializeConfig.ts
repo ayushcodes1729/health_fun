@@ -40,15 +40,15 @@ export type InitializeConfigInstructionAccounts = {
 export type InitializeConfigInstructionData = {
   discriminator: Uint8Array;
   maxStake: bigint;
-  maxFreezeTime: bigint;
-  minFreezeTime: bigint;
+  maxLockDuration: bigint;
+  minLockDuration: bigint;
   verificationKey: PublicKey;
 };
 
 export type InitializeConfigInstructionDataArgs = {
   maxStake: number | bigint;
-  maxFreezeTime: number | bigint;
-  minFreezeTime: number | bigint;
+  maxLockDuration: number | bigint;
+  minLockDuration: number | bigint;
   verificationKey: PublicKey;
 };
 
@@ -65,8 +65,8 @@ export function getInitializeConfigInstructionDataSerializer(): Serializer<
       [
         ['discriminator', bytes({ size: 8 })],
         ['maxStake', u64()],
-        ['maxFreezeTime', i64()],
-        ['minFreezeTime', i64()],
+        ['maxLockDuration', i64()],
+        ['minLockDuration', i64()],
         ['verificationKey', publicKeySerializer()],
       ],
       { description: 'InitializeConfigInstructionData' }

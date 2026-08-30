@@ -67,30 +67,17 @@ export class InvalidStakeOwnerErrorError extends ProgramError {
 codeToErrorMap.set(0x1773, InvalidStakeOwnerErrorError);
 nameToErrorMap.set('InvalidStakeOwnerError', InvalidStakeOwnerErrorError);
 
-/** AlreadyDepositedError: Already deposited once in stake */
-export class AlreadyDepositedErrorError extends ProgramError {
-  override readonly name: string = 'AlreadyDepositedError';
-
-  readonly code: number = 0x1774; // 6004
-
-  constructor(program: Program, cause?: Error) {
-    super('Already deposited once in stake', program, cause);
-  }
-}
-codeToErrorMap.set(0x1774, AlreadyDepositedErrorError);
-nameToErrorMap.set('AlreadyDepositedError', AlreadyDepositedErrorError);
-
 /** InvalidVerificationKeyError: Invalid verification key used */
 export class InvalidVerificationKeyErrorError extends ProgramError {
   override readonly name: string = 'InvalidVerificationKeyError';
 
-  readonly code: number = 0x1775; // 6005
+  readonly code: number = 0x1774; // 6004
 
   constructor(program: Program, cause?: Error) {
     super('Invalid verification key used', program, cause);
   }
 }
-codeToErrorMap.set(0x1775, InvalidVerificationKeyErrorError);
+codeToErrorMap.set(0x1774, InvalidVerificationKeyErrorError);
 nameToErrorMap.set(
   'InvalidVerificationKeyError',
   InvalidVerificationKeyErrorError
@@ -100,72 +87,72 @@ nameToErrorMap.set(
 export class StaleUpdateErrorError extends ProgramError {
   override readonly name: string = 'StaleUpdateError';
 
-  readonly code: number = 0x1776; // 6006
+  readonly code: number = 0x1775; // 6005
 
   constructor(program: Program, cause?: Error) {
     super('Current time is in the past of last sync time', program, cause);
   }
 }
-codeToErrorMap.set(0x1776, StaleUpdateErrorError);
+codeToErrorMap.set(0x1775, StaleUpdateErrorError);
 nameToErrorMap.set('StaleUpdateError', StaleUpdateErrorError);
 
 /** InvalidUserError: Attested data has invalid user key */
 export class InvalidUserErrorError extends ProgramError {
   override readonly name: string = 'InvalidUserError';
 
-  readonly code: number = 0x1777; // 6007
+  readonly code: number = 0x1776; // 6006
 
   constructor(program: Program, cause?: Error) {
     super('Attested data has invalid user key', program, cause);
   }
 }
-codeToErrorMap.set(0x1777, InvalidUserErrorError);
+codeToErrorMap.set(0x1776, InvalidUserErrorError);
 nameToErrorMap.set('InvalidUserError', InvalidUserErrorError);
 
 /** AttestationExpiredError: Attestation data expired */
 export class AttestationExpiredErrorError extends ProgramError {
   override readonly name: string = 'AttestationExpiredError';
 
-  readonly code: number = 0x1778; // 6008
+  readonly code: number = 0x1777; // 6007
 
   constructor(program: Program, cause?: Error) {
     super('Attestation data expired', program, cause);
   }
 }
-codeToErrorMap.set(0x1778, AttestationExpiredErrorError);
+codeToErrorMap.set(0x1777, AttestationExpiredErrorError);
 nameToErrorMap.set('AttestationExpiredError', AttestationExpiredErrorError);
 
 /** ReplayUpdateError: Replay update of health data */
 export class ReplayUpdateErrorError extends ProgramError {
   override readonly name: string = 'ReplayUpdateError';
 
-  readonly code: number = 0x1779; // 6009
+  readonly code: number = 0x1778; // 6008
 
   constructor(program: Program, cause?: Error) {
     super('Replay update of health data', program, cause);
   }
 }
-codeToErrorMap.set(0x1779, ReplayUpdateErrorError);
+codeToErrorMap.set(0x1778, ReplayUpdateErrorError);
 nameToErrorMap.set('ReplayUpdateError', ReplayUpdateErrorError);
 
 /** InvalidEpochError: Invalid epoch day in attestation */
 export class InvalidEpochErrorError extends ProgramError {
   override readonly name: string = 'InvalidEpochError';
 
-  readonly code: number = 0x177a; // 6010
+  readonly code: number = 0x1779; // 6009
 
   constructor(program: Program, cause?: Error) {
     super('Invalid epoch day in attestation', program, cause);
   }
 }
-codeToErrorMap.set(0x177a, InvalidEpochErrorError);
+codeToErrorMap.set(0x1779, InvalidEpochErrorError);
 nameToErrorMap.set('InvalidEpochError', InvalidEpochErrorError);
 
 /** MissingEd25519IxError: Current index of sysvar instructions not found or invalid */
 export class MissingEd25519IxErrorError extends ProgramError {
   override readonly name: string = 'MissingEd25519IxError';
 
-  readonly code: number = 0x177b; // 6011
+  readonly code: number = 0x177a; // 6010
 
   constructor(program: Program, cause?: Error) {
     super(
@@ -175,20 +162,20 @@ export class MissingEd25519IxErrorError extends ProgramError {
     );
   }
 }
-codeToErrorMap.set(0x177b, MissingEd25519IxErrorError);
+codeToErrorMap.set(0x177a, MissingEd25519IxErrorError);
 nameToErrorMap.set('MissingEd25519IxError', MissingEd25519IxErrorError);
 
 /** InvalidVerificationKeySignError: Invalid signature for the payload data */
 export class InvalidVerificationKeySignErrorError extends ProgramError {
   override readonly name: string = 'InvalidVerificationKeySignError';
 
-  readonly code: number = 0x177c; // 6012
+  readonly code: number = 0x177b; // 6011
 
   constructor(program: Program, cause?: Error) {
     super('Invalid signature for the payload data', program, cause);
   }
 }
-codeToErrorMap.set(0x177c, InvalidVerificationKeySignErrorError);
+codeToErrorMap.set(0x177b, InvalidVerificationKeySignErrorError);
 nameToErrorMap.set(
   'InvalidVerificationKeySignError',
   InvalidVerificationKeySignErrorError
@@ -198,7 +185,7 @@ nameToErrorMap.set(
 export class InvalidInstructionErrorError extends ProgramError {
   override readonly name: string = 'InvalidInstructionError';
 
-  readonly code: number = 0x177d; // 6013
+  readonly code: number = 0x177c; // 6012
 
   constructor(program: Program, cause?: Error) {
     super(
@@ -208,47 +195,73 @@ export class InvalidInstructionErrorError extends ProgramError {
     );
   }
 }
-codeToErrorMap.set(0x177d, InvalidInstructionErrorError);
+codeToErrorMap.set(0x177c, InvalidInstructionErrorError);
 nameToErrorMap.set('InvalidInstructionError', InvalidInstructionErrorError);
 
 /** InvalidTreasuryVaultError: Invalid vault pubkey for treasury */
 export class InvalidTreasuryVaultErrorError extends ProgramError {
   override readonly name: string = 'InvalidTreasuryVaultError';
 
-  readonly code: number = 0x177e; // 6014
+  readonly code: number = 0x177d; // 6013
 
   constructor(program: Program, cause?: Error) {
     super('Invalid vault pubkey for treasury', program, cause);
   }
 }
-codeToErrorMap.set(0x177e, InvalidTreasuryVaultErrorError);
+codeToErrorMap.set(0x177d, InvalidTreasuryVaultErrorError);
 nameToErrorMap.set('InvalidTreasuryVaultError', InvalidTreasuryVaultErrorError);
 
 /** AlreadyClaimedError: The staked challenge is already claimed */
 export class AlreadyClaimedErrorError extends ProgramError {
   override readonly name: string = 'AlreadyClaimedError';
 
-  readonly code: number = 0x177f; // 6015
+  readonly code: number = 0x177e; // 6014
 
   constructor(program: Program, cause?: Error) {
     super('The staked challenge is already claimed', program, cause);
   }
 }
-codeToErrorMap.set(0x177f, AlreadyClaimedErrorError);
+codeToErrorMap.set(0x177e, AlreadyClaimedErrorError);
 nameToErrorMap.set('AlreadyClaimedError', AlreadyClaimedErrorError);
 
 /** StakeStillLockedError: The challenge has not completed */
 export class StakeStillLockedErrorError extends ProgramError {
   override readonly name: string = 'StakeStillLockedError';
 
-  readonly code: number = 0x1780; // 6016
+  readonly code: number = 0x177f; // 6015
 
   constructor(program: Program, cause?: Error) {
     super('The challenge has not completed', program, cause);
   }
 }
-codeToErrorMap.set(0x1780, StakeStillLockedErrorError);
+codeToErrorMap.set(0x177f, StakeStillLockedErrorError);
 nameToErrorMap.set('StakeStillLockedError', StakeStillLockedErrorError);
+
+/** FutureEpochError: Attested epoch day is in the future */
+export class FutureEpochErrorError extends ProgramError {
+  override readonly name: string = 'FutureEpochError';
+
+  readonly code: number = 0x1780; // 6016
+
+  constructor(program: Program, cause?: Error) {
+    super('Attested epoch day is in the future', program, cause);
+  }
+}
+codeToErrorMap.set(0x1780, FutureEpochErrorError);
+nameToErrorMap.set('FutureEpochError', FutureEpochErrorError);
+
+/** ZeroStakeError: Stake amount must be greater than zero */
+export class ZeroStakeErrorError extends ProgramError {
+  override readonly name: string = 'ZeroStakeError';
+
+  readonly code: number = 0x1781; // 6017
+
+  constructor(program: Program, cause?: Error) {
+    super('Stake amount must be greater than zero', program, cause);
+  }
+}
+codeToErrorMap.set(0x1781, ZeroStakeErrorError);
+nameToErrorMap.set('ZeroStakeError', ZeroStakeErrorError);
 
 /**
  * Attempts to resolve a custom program error from the provided error code.

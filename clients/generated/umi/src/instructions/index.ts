@@ -7,7 +7,6 @@
  */
 
 export * from './claim';
-export * from './depositToVault';
 export * from './initializeConfig';
 export * from './initializeHealthData';
 export * from './initializeTreasuryForMint';
