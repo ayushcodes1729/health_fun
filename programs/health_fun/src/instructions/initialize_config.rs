@@ -25,8 +25,8 @@ impl<'info> InitializeConfig<'info> {
     pub fn initialize_config(
         &mut self,
         max_stake: u64,
-        max_freeze_time: i64,
-        min_freeze_time: i64,
+        max_lock_duration: i64,
+        min_lock_duration: i64,
         verification_key: Pubkey,
         bumps: &InitializeConfigBumps,
     ) -> Result<()> {
@@ -38,8 +38,8 @@ impl<'info> InitializeConfig<'info> {
 
         self.stake_config.set_inner(StakeConfig {
             max_stake,
-            max_freeze_time,
-            min_freeze_time,
+            max_lock_duration,
+            min_lock_duration,
             verification_key,
             bump: bumps.stake_config,
         });

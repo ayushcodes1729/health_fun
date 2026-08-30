@@ -17,6 +17,11 @@ pub struct AttestationData {
     pub steps: u32,
     pub sleep_hours: u8,
     pub gym: bool,
+    /// Whole days since the Unix epoch, i.e. `unix_timestamp / 86400`.
+    /// The oracle MUST use this numbering: it is compared directly against
+    /// `stake_account.last_day_checked`, which the program derives from the
+    /// chain clock. Any other scheme (days since challenge start, a calendar
+    /// ordinal) silently stops goal progress from ever accruing.
     pub epoch_day: u16,
     pub nonce: u64,
     pub expires_at: i64,
@@ -65,6 +70,15 @@ impl <'info> UpdateHealthData<'info>{
         require!(now <= a.expires_at, ErrorCode::AttestationExpiredError);
         require!(now > self.health_data.last_sync_timestamp, ErrorCode::StaleUpdateError);
         require!(a.epoch_day > self.health_data.epoch_day, ErrorCode::InvalidEpochError);
+
+        // Bound the attested day by the chain clock. Without this an attestation
+        // carrying u16::MAX would set health_data.epoch_day to a value no later
+        // attestation could exceed, permanently freezing the account, and a
+        // whole challenge could be attested in seconds.
+        require!(
+            a.epoch_day <= (now / 86400) as u16,
+            ErrorCode::FutureEpochError
+        );
         
         // stops any replay of update data instructions
         require!(a.nonce > self.health_data.last_nonce, ErrorCode::ReplayUpdateError);

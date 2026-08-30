@@ -18,11 +18,11 @@ pub mod health_fun {
     pub fn initialize_config(
         ctx: Context<InitializeConfig>,
         max_stake: u64,
-        max_freeze_time: i64,
-        min_freeze_time: i64,
+        max_lock_duration: i64,
+        min_lock_duration: i64,
         verification_key: Pubkey,
     ) -> Result<()> {
-        ctx.accounts.initialize_config(max_stake, max_freeze_time, min_freeze_time, verification_key, &ctx.bumps)?;
+        ctx.accounts.initialize_config(max_stake, max_lock_duration, min_lock_duration, verification_key, &ctx.bumps)?;
         Ok(())
     }
 
@@ -50,14 +50,6 @@ pub mod health_fun {
     ) -> Result<()> {
         ctx.accounts
             .init_stake(staked_amount, total_days, goal_type, goal_per_day, &ctx.bumps)?;
-        Ok(())
-    }
-
-    pub fn deposit_to_vault(
-        ctx: Context<DepositToVault>,
-        staked_amount: u64,
-    ) -> Result<()> {
-        ctx.accounts.deposit_to_vault(staked_amount)?;
         Ok(())
     }
 

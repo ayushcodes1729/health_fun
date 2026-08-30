@@ -12,6 +12,7 @@ import {
   createAssociatedTokenAccountInstruction,
   createInitializeMint2Instruction,
   createMintToInstruction,
+  createTransferCheckedInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 import { FailedTransactionMetadata, LiteSVM } from "litesvm";
@@ -47,8 +48,12 @@ const GOAL_STEPS_PER_DAY = 5_000;
 const START_TIMESTAMP = 1_800_000_000;
 
 const MAX_STAKE = new anchor.BN(1_000_000_000);
-const MIN_FREEZE_TIME = new anchor.BN(0);
-const MAX_FREEZE_TIME = new anchor.BN(4_102_444_800);
+// Lock bounds are DURATIONS in seconds, not timestamps.
+const MIN_LOCK_DURATION = new anchor.BN(86400);
+const MAX_LOCK_DURATION = new anchor.BN(365 * 86400);
+
+// initialize_config is gated on this constant, compiled into the program.
+const ADMIN_KEY = "3CPvFJ3RDJH9RjpzY3WYxn1vcrL7J63hZQc9YboMaCg9";
 
 const GOAL_STEPS = { steps: {} } as any;
 
@@ -57,8 +62,27 @@ function loadAdminKeypair(): web3.Keypair {
   // program, so these tests must sign with that exact local wallet.
   const walletPath =
     process.env.ANCHOR_WALLET ?? path.join(os.homedir(), ".config/solana/id.json");
+
+  if (!fs.existsSync(walletPath)) {
+    throw new Error(
+      `No wallet at ${walletPath}. These tests must sign as the program's ` +
+        `hardcoded ADMIN_KEY (${ADMIN_KEY}); set ANCHOR_WALLET to a keypair file for it.`
+    );
+  }
+
   const secret = JSON.parse(fs.readFileSync(walletPath, "utf8"));
-  return web3.Keypair.fromSecretKey(Uint8Array.from(secret));
+  const keypair = web3.Keypair.fromSecretKey(Uint8Array.from(secret));
+
+  // Without this, a mismatched wallet fails later inside initialize_config with
+  // InvalidAdminError, which points at the program rather than the machine.
+  if (keypair.publicKey.toBase58() !== ADMIN_KEY) {
+    throw new Error(
+      `Wallet ${walletPath} is ${keypair.publicKey.toBase58()}, but the program's ` +
+        `ADMIN_KEY is ${ADMIN_KEY}. Point ANCHOR_WALLET at the admin keypair.`
+    );
+  }
+
+  return keypair;
 }
 
 type World = {
@@ -117,7 +141,7 @@ function tokenBalance(svm: LiteSVM, account: web3.PublicKey): bigint {
 
 /**
  * Builds a fully set-up challenge: config, treasury, mint, funded user, an
- * initialized health account, a stake, and a deposit sitting in the vault.
+ * initialized health account, and a funded stake (stake transfers atomically).
  */
 function setupWorld(): World {
   const svm = new LiteSVM();
@@ -201,8 +225,8 @@ function setupWorld(): World {
     [
       program.instruction.initializeConfig(
         MAX_STAKE,
-        MAX_FREEZE_TIME,
-        MIN_FREEZE_TIME,
+        MAX_LOCK_DURATION,
+        MIN_LOCK_DURATION,
         admin.publicKey,
         {
           accounts: {
@@ -259,18 +283,6 @@ function setupWorld(): World {
           },
         }
       ),
-      program.instruction.depositToVault(new anchor.BN(STAKE_AMOUNT), {
-        accounts: {
-          user: user.publicKey,
-          stakeAccount: stakePda,
-          stakeConfig: stakeConfigPda,
-          mint,
-          vault: vaultPda,
-          userAta,
-          tokenProgram: TOKEN_PROGRAM_ID,
-          systemProgram: web3.SystemProgram.programId,
-        },
-      }),
     ],
     user,
     [user]
@@ -278,6 +290,7 @@ function setupWorld(): World {
 
   return world;
 }
+
 
 /** Submits one oracle-signed day of health data at the given clock time. */
 function attestDay(
@@ -344,7 +357,7 @@ function claim(w: World) {
 }
 
 describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
-  it("records the deposit on-chain", () => {
+  it("records the stake amount on-chain and funds the vault atomically", () => {
     const w = setupWorld();
     const stake = w.svm.getAccount(w.stakePda);
     expect(stake).to.not.equal(null);
@@ -420,6 +433,205 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
     );
     expect(tokenBalance(w.svm, w.userAta)).to.equal(userBefore);
     expect(tokenBalance(w.svm, w.vaultPda)).to.equal(BigInt(0));
+  });
+
+  it("sweeps tokens transferred into the vault outside the program", () => {
+    const w = setupWorld();
+    const smuggled = 150_000;
+
+    // Anyone can transfer into an SPL token account without the owner's
+    // consent, so this bypasses stake and its max_stake check entirely.
+    send(
+      w.svm,
+      [
+        createTransferCheckedInstruction(
+          w.userAta,
+          w.mint,
+          w.vaultPda,
+          w.user.publicKey,
+          smuggled,
+          DECIMALS
+        ),
+      ],
+      w.user,
+      [w.user]
+    );
+    expect(tokenBalance(w.svm, w.vaultPda)).to.equal(
+      BigInt(STAKE_AMOUNT + smuggled)
+    );
+
+    for (let day = 1; day <= TOTAL_DAYS; day += 1) {
+      attestDay(w, {
+        day,
+        steps: 7_500,
+        timestamp: START_TIMESTAMP + day * 86400,
+      });
+    }
+
+    const userBefore = tokenBalance(w.svm, w.userAta);
+    const treasuryBefore = tokenBalance(w.svm, w.treasuryVault);
+
+    setClock(w.svm, START_TIMESTAMP + (TOTAL_DAYS + 1) * 86400);
+    claim(w);
+
+    // The winner gets back only what the program recorded, never the smuggled
+    // excess; the remainder goes to the treasury rather than out to the user.
+    expect(tokenBalance(w.svm, w.userAta)).to.equal(
+      userBefore + BigInt(STAKE_AMOUNT)
+    );
+    expect(tokenBalance(w.svm, w.treasuryVault)).to.equal(
+      treasuryBefore + BigInt(smuggled)
+    );
+    expect(tokenBalance(w.svm, w.vaultPda)).to.equal(BigInt(0));
+  });
+
+  it("rejects a replayed nonce", () => {
+    const w = setupWorld();
+
+    attestDay(w, { day: 1, steps: 7_000, timestamp: START_TIMESTAMP + 86400 });
+
+    // Day 2 is a valid next day, but reuses day 1's nonce.
+    setClock(w.svm, START_TIMESTAMP + 2 * 86400);
+    const attestation = {
+      challengeId: new anchor.BN(2),
+      user: w.user.publicKey,
+      steps: 7_000,
+      sleepHours: 8,
+      gym: true,
+      epochDay: Math.floor(START_TIMESTAMP / 86400) + 2,
+      nonce: new anchor.BN(1),
+      expiresAt: new anchor.BN(START_TIMESTAMP + 2 * 86400 + 3600),
+    };
+
+    expect(() =>
+      send(
+        w.svm,
+        [
+          makeEd25519VerifyIx(w.admin, buildAttestationMessage(attestation)),
+          w.program.instruction.updateHealthData(attestation as any, {
+            accounts: {
+              user: w.user.publicKey,
+              healthData: w.healthPda,
+              stakeConfig: w.stakeConfigPda,
+              stakeAccount: w.stakePda,
+              instructions: INSTRUCTIONS_SYSVAR,
+              systemProgram: web3.SystemProgram.programId,
+            },
+          }),
+        ],
+        w.user,
+        [w.user]
+      )
+    ).to.throw(/ReplayUpdate/i);
+  });
+
+  it("rejects an attested day in the future", () => {
+    const w = setupWorld();
+
+    // u16::MAX would otherwise be stored and make every later attestation
+    // impossible, permanently freezing the account.
+    expect(() =>
+      attestDay(w, {
+        day: 65_535 - Math.floor(START_TIMESTAMP / 86400),
+        steps: 7_500,
+        timestamp: START_TIMESTAMP + 86400,
+      })
+    ).to.throw(/FutureEpoch/i);
+  });
+
+  // `stake` builds a challenge for a fresh user; both zero-value guards run
+  // before any account is written, so the whole transaction is rejected.
+  function expectStakeRejected(
+    w: World,
+    amount: number,
+    totalDays: number
+  ): () => void {
+    const other = web3.Keypair.generate();
+    w.svm.airdrop(other.publicKey, BigInt(10 * web3.LAMPORTS_PER_SOL));
+
+    const { stakePda, vaultPda } = findUserPdas(w.programId, other.publicKey);
+    const otherAta = getAssociatedTokenAddressSync(w.mint, other.publicKey, false);
+
+    return () =>
+      send(
+        w.svm,
+        [
+          createAssociatedTokenAccountInstruction(
+            other.publicKey,
+            otherAta,
+            other.publicKey,
+            w.mint
+          ),
+          w.program.instruction.stake(
+            new anchor.BN(amount),
+            totalDays,
+            GOAL_STEPS,
+            GOAL_STEPS_PER_DAY,
+            {
+              accounts: {
+                user: other.publicKey,
+                stakeAccount: stakePda,
+                stakeConfig: w.stakeConfigPda,
+                mint: w.mint,
+                vault: vaultPda,
+                userAta: otherAta,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                systemProgram: web3.SystemProgram.programId,
+              },
+            }
+          ),
+        ],
+        other,
+        [other]
+      );
+  }
+
+  it("rejects a stake of zero tokens", () => {
+    const w = setupWorld();
+    expect(expectStakeRejected(w, 0, TOTAL_DAYS)).to.throw(/ZeroStake/i);
+  });
+
+  it("rejects a zero-day challenge", () => {
+    const w = setupWorld();
+    const other = web3.Keypair.generate();
+    w.svm.airdrop(other.publicKey, BigInt(10 * web3.LAMPORTS_PER_SOL));
+
+    const { stakePda, vaultPda } = findUserPdas(w.programId, other.publicKey);
+    const otherAta = getAssociatedTokenAddressSync(w.mint, other.publicKey, false);
+
+    expect(() =>
+      send(
+        w.svm,
+        [
+          createAssociatedTokenAccountInstruction(
+            other.publicKey,
+            otherAta,
+            other.publicKey,
+            w.mint
+          ),
+          w.program.instruction.stake(
+            new anchor.BN(STAKE_AMOUNT),
+            0,
+            GOAL_STEPS,
+            GOAL_STEPS_PER_DAY,
+            {
+              accounts: {
+                user: other.publicKey,
+                stakeAccount: stakePda,
+                stakeConfig: w.stakeConfigPda,
+                mint: w.mint,
+                vault: vaultPda,
+                userAta: otherAta,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                systemProgram: web3.SystemProgram.programId,
+              },
+            }
+          ),
+        ],
+        other,
+        [other]
+      )
+    ).to.throw(/DurationOutOfRange/i);
   });
 
   it("rejects a second claim", () => {

@@ -83,7 +83,16 @@ impl<'info> Claim<'info> {
 
         let won = self.stake_account.days_goal_met >= self.stake_account.total_days;
         let decimals = self.mint.decimals;
-        let amount = self.vault.amount;
+
+        // Pay out the amount the program recorded, not the vault balance.
+        // Anyone can transfer into an SPL token account without the owner's
+        // consent, so paying `vault.amount` let a user smuggle past `max_stake`
+        // with a direct transfer and withdraw the whole inflated balance.
+        // Anything above the recorded stake is swept to the treasury, which
+        // removes the incentive to do so and leaves the vault empty either way.
+        let vault_balance = self.vault.amount;
+        let staked = self.stake_account.staked_amount.min(vault_balance);
+        let excess = vault_balance - staked;
 
         let user_key = self.user.key();
         let stake_bump = [self.stake_account.bump];
@@ -111,7 +120,7 @@ impl<'info> Claim<'info> {
                 signer_seeds,
             );
 
-            transfer_checked(cpi_ctx, amount, decimals)?;
+            transfer_checked(cpi_ctx, staked, decimals)?;
         } else {
             let cpi_accounts = TransferChecked {
                 from: self.vault.to_account_info(),
@@ -120,7 +129,7 @@ impl<'info> Claim<'info> {
                 authority: self.stake_account.to_account_info(),
             };
 
-            
+
             let signer_seeds = &[stake_seeds];
 
             let cpi_ctx = CpiContext::new_with_signer(
@@ -129,7 +138,27 @@ impl<'info> Claim<'info> {
                 signer_seeds,
             );
 
-            transfer_checked(cpi_ctx, amount, decimals)?;
+            transfer_checked(cpi_ctx, staked, decimals)?;
+        }
+
+        // Sweep any tokens transferred into the vault outside `stake`.
+        if excess > 0 {
+            let cpi_accounts = TransferChecked {
+                from: self.vault.to_account_info(),
+                mint: self.mint.to_account_info(),
+                to: self.treasury_vault.to_account_info(),
+                authority: self.stake_account.to_account_info(),
+            };
+
+            let signer_seeds = &[stake_seeds];
+
+            let cpi_ctx = CpiContext::new_with_signer(
+                self.token_program.to_account_info(),
+                cpi_accounts,
+                signer_seeds,
+            );
+
+            transfer_checked(cpi_ctx, excess, decimals)?;
         }
 
         self.stake_account.claimed = true;

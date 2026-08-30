@@ -25,6 +25,13 @@ export type AttestationData = {
   steps: number;
   sleepHours: number;
   gym: boolean;
+  /**
+   * Whole days since the Unix epoch, i.e. `unix_timestamp / 86400`.
+   * The oracle MUST use this numbering: it is compared directly against
+   * `stake_account.last_day_checked`, which the program derives from the
+   * chain clock. Any other scheme (days since challenge start, a calendar
+   * ordinal) silently stops goal progress from ever accruing.
+   */
   epochDay: number;
   nonce: bigint;
   expiresAt: bigint;
@@ -36,6 +43,13 @@ export type AttestationDataArgs = {
   steps: number;
   sleepHours: number;
   gym: boolean;
+  /**
+   * Whole days since the Unix epoch, i.e. `unix_timestamp / 86400`.
+   * The oracle MUST use this numbering: it is compared directly against
+   * `stake_account.last_day_checked`, which the program derives from the
+   * chain clock. Any other scheme (days since challenge start, a calendar
+   * ordinal) silently stops goal progress from ever accruing.
+   */
   epochDay: number;
   nonce: number | bigint;
   expiresAt: number | bigint;

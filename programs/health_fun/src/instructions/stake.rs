@@ -52,56 +52,6 @@ pub struct Stake<'info>{
     pub system_program: Program<'info, System>
 }
 
-/// Deposit needs its own context. Reusing `Stake` meant inheriting its `init`
-/// constraints, which run during account validation and try to re-create the
-/// stake account and vault that `stake` already made — so the instruction could
-/// never be called successfully.
-#[derive(Accounts)]
-pub struct DepositToVault<'info> {
-    #[account(mut)]
-    pub user: Signer<'info>,
-
-    #[account(
-        mut,
-        seeds = [b"stake", user.key().as_ref()],
-        bump = stake_account.bump,
-        has_one = mint,
-        constraint = stake_account.owner == user.key() @ ErrorCode::InvalidStakeOwnerError
-    )]
-    pub stake_account: Account<'info, StakeAccount>,
-
-    #[account(
-        seeds = [b"config"],
-        bump = stake_config.bump
-    )]
-    pub stake_config: Account<'info, StakeConfig>,
-
-    #[account(
-        mint::token_program = token_program
-    )]
-    pub mint: InterfaceAccount<'info, Mint>,
-
-    #[account(
-        mut,
-        seeds = [b"vault", user.key().as_ref()],
-        bump,
-        token::mint = mint,
-        token::authority = stake_account
-    )]
-    pub vault: InterfaceAccount<'info, TokenAccount>,
-
-    #[account(
-        mut,
-        associated_token::mint = mint,
-        associated_token::authority = user
-    )]
-    pub user_ata: InterfaceAccount<'info, TokenAccount>,
-
-    pub token_program: Interface<'info, TokenInterface>,
-
-    pub system_program: Program<'info, System>
-}
-
 impl<'info> Stake<'info> {
     pub fn init_stake(
         &mut self,
@@ -111,52 +61,46 @@ impl<'info> Stake<'info> {
         goal_per_day: u32,
         bumps: &StakeBumps
     )-> Result<()> {
+        // A challenge with nothing at stake is not a challenge.
+        require!(staked_amount > 0, ErrorCode::ZeroStakeError);
         require!(staked_amount<self.stake_config.max_stake, ErrorCode::MaxStakeError);
         let now = Clock::get()?.unix_timestamp;
         let unlock_at = now + (total_days as i64 * 86400);
 
-        // Range-check the lock *duration*. This previously computed
+        // A zero-day challenge unlocks immediately and satisfies
+        // `days_goal_met >= total_days` with no attestations at all, so it is
+        // never a valid challenge regardless of how min_lock_duration is set.
+        require!(total_days > 0, ErrorCode::DurationOutOfRangeError);
+
+        // Range-check the lock *duration* in seconds. This previously computed
         // `now + total_days / 86400`, which is just `now` for any realistic
         // total_days, so the bounds could never reject anything.
         let lock_period = total_days as i64 * 86400;
-        require!(self.stake_config.min_freeze_time <= lock_period && lock_period <= self.stake_config.max_freeze_time, ErrorCode::DurationOutOfRangeError);
+        require!(self.stake_config.min_lock_duration <= lock_period && lock_period <= self.stake_config.max_lock_duration, ErrorCode::DurationOutOfRangeError);
         let last_day_checked = (now/ 86400) as u16; 
 
-        self.stake_account.set_inner(StakeAccount { 
-            owner: self.user.key(), 
-            mint: self.mint.key(), 
-            staked_amount: 0, 
-            staked_at: Clock::get()?.unix_timestamp, 
-            total_days, 
-            goal_type, 
-            days_goal_met: 0, 
-            last_day_checked, 
-            goal_per_day, 
-            vault: self.vault.key(), 
+        self.stake_account.set_inner(StakeAccount {
+            owner: self.user.key(),
+            mint: self.mint.key(),
+            staked_amount,
+            staked_at: now,
+            total_days,
+            goal_type,
+            days_goal_met: 0,
+            last_day_checked,
+            goal_per_day,
+            vault: self.vault.key(),
             unlock_at,
             claimed: false,
-            bump: bumps.stake_account 
+            bump: bumps.stake_account
         });
 
-        Ok(())
-    }
-}
-
-impl<'info> DepositToVault<'info> {
-    pub fn deposit_to_vault(&mut self, staked_amount: u64) -> Result<()> {
-
-        require!(self.stake_account.staked_amount == 0, ErrorCode::AlreadyDepositedError);
-
-        // Enforce the configured cap against the amount actually being moved.
-        // Checking it in `stake` only validated an argument that had no
-        // connection to what ended up in the vault.
-        require!(staked_amount < self.stake_config.max_stake, ErrorCode::MaxStakeError);
-
-        let now = Clock::get()?.unix_timestamp;
-        let last_day_checked = (now/ 86400) as u16; 
-
-        let decimals = self.mint.decimals;
-
+        // Fund the vault in the same instruction that creates the challenge.
+        // While funding was a separate step, a user could create a challenge,
+        // leave the vault empty, watch `days_goal_met` accrue on-chain, and pay
+        // in only once a win was already certain — a free option with no
+        // downside risk. Doing the transfer here makes that unrepresentable:
+        // either the challenge exists and is funded, or neither happened.
         let transfer_accounts = TransferChecked {
             from: self.user_ata.to_account_info(),
             mint: self.mint.to_account_info(),
@@ -164,14 +108,13 @@ impl<'info> DepositToVault<'info> {
             authority: self.user.to_account_info()
         };
 
-        let cpi_program = self.token_program.to_account_info();
-        let cpi_ctx = CpiContext::new(cpi_program, transfer_accounts);
+        let cpi_ctx = CpiContext::new(
+            self.token_program.to_account_info(),
+            transfer_accounts,
+        );
 
-        transfer_checked(cpi_ctx, staked_amount, decimals)?;
-        
-        self.stake_account.staked_amount = staked_amount;
-        self.stake_account.staked_at = now;
-        self.stake_account.last_day_checked = last_day_checked;
+        transfer_checked(cpi_ctx, staked_amount, self.mint.decimals)?;
+
         Ok(())
     }
 }
