@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
-    transfer_checked, Mint, TokenAccount, TokenInterface, TransferChecked
+    close_account, transfer_checked, CloseAccount, Mint, TokenAccount, TokenInterface,
+    TransferChecked
 };
 
 use crate::{StakeAccount, TreasuryConfig};
@@ -160,6 +161,22 @@ impl<'info> Claim<'info> {
 
             transfer_checked(cpi_ctx, excess, decimals)?;
         }
+
+        // The vault is empty now, so close it and return its rent to the user.
+        // Leaving it open stranded the rent-exempt lamports permanently: nothing
+        // in the program could ever move them afterwards.
+        let signer_seeds = &[stake_seeds];
+        let cpi_ctx = CpiContext::new_with_signer(
+            self.token_program.to_account_info(),
+            CloseAccount {
+                account: self.vault.to_account_info(),
+                destination: self.user.to_account_info(),
+                authority: self.stake_account.to_account_info(),
+            },
+            signer_seeds,
+        );
+
+        close_account(cpi_ctx)?;
 
         self.stake_account.claimed = true;
 

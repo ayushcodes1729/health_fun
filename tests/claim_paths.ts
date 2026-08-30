@@ -132,6 +132,16 @@ function setClock(svm: LiteSVM, unixTimestamp: number) {
   svm.setClock(clock);
 }
 
+/** Claim closes the vault, so the account should be gone (or zeroed) after. */
+function expectVaultClosed(svm: LiteSVM, vault: web3.PublicKey) {
+  const raw = svm.getAccount(vault);
+  if (raw !== null && raw.lamports !== 0) {
+    throw new Error(
+      `Vault ${vault.toBase58()} still open with ${raw.lamports} lamports`
+    );
+  }
+}
+
 function tokenBalance(svm: LiteSVM, account: web3.PublicKey): bigint {
   const raw = svm.getAccount(account);
   if (!raw) throw new Error(`Token account ${account.toBase58()} not found`);
@@ -390,6 +400,8 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
 
     const userBefore = tokenBalance(w.svm, w.userAta);
     const treasuryBefore = tokenBalance(w.svm, w.treasuryVault);
+    const vaultRent = w.svm.getAccount(w.vaultPda)!.lamports;
+    const lamportsBefore = w.svm.getBalance(w.user.publicKey)!;
 
     // Move past unlock_at.
     setClock(w.svm, START_TIMESTAMP + (TOTAL_DAYS + 1) * 86400);
@@ -399,7 +411,13 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
       userBefore + BigInt(STAKE_AMOUNT)
     );
     expect(tokenBalance(w.svm, w.treasuryVault)).to.equal(treasuryBefore);
-    expect(tokenBalance(w.svm, w.vaultPda)).to.equal(BigInt(0));
+    expectVaultClosed(w.svm, w.vaultPda);
+
+    // Closing the vault must return its rent to the user rather than stranding
+    // it. Compare net of the transaction fee.
+    expect(
+      w.svm.getBalance(w.user.publicKey)! > lamportsBefore + BigInt(vaultRent) / BigInt(2)
+    ).to.equal(true);
   });
 
   it("forfeits the stake to the treasury when a day is missed", () => {
@@ -432,7 +450,7 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
       treasuryBefore + BigInt(STAKE_AMOUNT)
     );
     expect(tokenBalance(w.svm, w.userAta)).to.equal(userBefore);
-    expect(tokenBalance(w.svm, w.vaultPda)).to.equal(BigInt(0));
+    expectVaultClosed(w.svm, w.vaultPda);
   });
 
   it("sweeps tokens transferred into the vault outside the program", () => {
@@ -482,7 +500,7 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
     expect(tokenBalance(w.svm, w.treasuryVault)).to.equal(
       treasuryBefore + BigInt(smuggled)
     );
-    expect(tokenBalance(w.svm, w.vaultPda)).to.equal(BigInt(0));
+    expectVaultClosed(w.svm, w.vaultPda);
   });
 
   it("rejects a replayed nonce", () => {
@@ -648,6 +666,15 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
     setClock(w.svm, START_TIMESTAMP + (TOTAL_DAYS + 1) * 86400);
     claim(w);
 
-    expect(() => claim(w)).to.throw(/AlreadyClaimed/i);
+    // Claim closes the vault, so a second attempt is now rejected during
+    // account validation rather than by the `claimed` flag, which stays set as
+    // defence in depth.
+    expect(() => claim(w)).to.throw(/AccountNotInitialized/i);
+
+    const decoded = w.program.coder.accounts.decode(
+      "stakeAccount",
+      Buffer.from(w.svm.getAccount(w.stakePda)!.data)
+    );
+    expect(decoded.claimed).to.equal(true);
   });
 });
