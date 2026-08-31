@@ -7,5 +7,6 @@
     "target": "es2020",
     "esModuleInterop": true,
     "resolveJsonModule": true
-  }
+  },
+  "include": ["tests/**/*", "clients/**/*", "migrations/**/*"]
 }
