@@ -32,6 +32,7 @@ import {
 export type ClaimInstructionAccounts = {
   user: Signer;
   stakeAccount?: PublicKey | Pda;
+  userProfile?: PublicKey | Pda;
   stakeConfig?: PublicKey | Pda;
   treasuryConfig?: PublicKey | Pda;
   vault?: PublicKey | Pda;
@@ -81,39 +82,44 @@ export function claim(
       isWritable: true as boolean,
       value: input.stakeAccount ?? null,
     },
-    stakeConfig: {
+    userProfile: {
       index: 2,
+      isWritable: true as boolean,
+      value: input.userProfile ?? null,
+    },
+    stakeConfig: {
+      index: 3,
       isWritable: false as boolean,
       value: input.stakeConfig ?? null,
     },
     treasuryConfig: {
-      index: 3,
+      index: 4,
       isWritable: false as boolean,
       value: input.treasuryConfig ?? null,
     },
     vault: {
-      index: 4,
+      index: 5,
       isWritable: true as boolean,
       value: input.vault ?? null,
     },
     treasuryAuthority: {
-      index: 5,
+      index: 6,
       isWritable: false as boolean,
       value: input.treasuryAuthority ?? null,
     },
     treasuryVault: {
-      index: 6,
+      index: 7,
       isWritable: true as boolean,
       value: input.treasuryVault ?? null,
     },
     userAta: {
-      index: 7,
+      index: 8,
       isWritable: true as boolean,
       value: input.userAta ?? null,
     },
-    mint: { index: 8, isWritable: false as boolean, value: input.mint ?? null },
+    mint: { index: 9, isWritable: false as boolean, value: input.mint ?? null },
     tokenProgram: {
-      index: 9,
+      index: 10,
       isWritable: false as boolean,
       value: input.tokenProgram ?? null,
     },
@@ -123,6 +129,14 @@ export function claim(
   if (!resolvedAccounts.stakeAccount.value) {
     resolvedAccounts.stakeAccount.value = context.eddsa.findPda(programId, [
       bytes().serialize(new Uint8Array([115, 116, 97, 107, 101])),
+      publicKeySerializer().serialize(
+        expectPublicKey(resolvedAccounts.user.value)
+      ),
+    ]);
+  }
+  if (!resolvedAccounts.userProfile.value) {
+    resolvedAccounts.userProfile.value = context.eddsa.findPda(programId, [
+      bytes().serialize(new Uint8Array([112, 114, 111, 102, 105, 108, 101])),
       publicKeySerializer().serialize(
         expectPublicKey(resolvedAccounts.user.value)
       ),

@@ -119,6 +119,16 @@ export function findUserPdas(programId: web3.PublicKey, user: web3.PublicKey) {
   return { stakePda, vaultPda, healthPda };
 }
 
+export function findProfilePda(
+  programId: web3.PublicKey,
+  user: web3.PublicKey
+): web3.PublicKey {
+  return web3.PublicKey.findProgramAddressSync(
+    [Buffer.from("profile"), user.toBuffer()],
+    programId
+  )[0];
+}
+
 export function findTreasuryAuthorityPda(
   programId: web3.PublicKey,
   mint: web3.PublicKey

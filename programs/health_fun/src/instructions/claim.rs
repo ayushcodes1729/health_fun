@@ -4,22 +4,50 @@ use anchor_spl::token_interface::{
     TransferChecked
 };
 
-use crate::{StakeAccount, TreasuryConfig};
+use crate::{StakeAccount, TreasuryConfig, UserProfile};
 use crate::error::ErrorCode;
+
+/// Emitted on settlement. The StakeAccount is closed straight afterwards, so
+/// this is the only per-challenge record that survives; the backend indexes it
+/// to build history, streaks and leaderboards.
+#[event]
+pub struct ChallengeSettled {
+    pub user: Pubkey,
+    pub mint: Pubkey,
+    pub staked_amount: u64,
+    pub total_days: u16,
+    pub days_goal_met: u16,
+    pub goal_per_day: u32,
+    pub won: bool,
+    pub staked_at: i64,
+    pub settled_at: i64,
+}
 
 #[derive(Accounts)]
 pub struct Claim<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
+    // Closed here: the challenge is over, so its rent goes back to the user and
+    // the PDA is freed for their next challenge. Settlement detail survives in
+    // the ChallengeSettled event and the aggregates on user_profile.
     #[account(
         mut,
+        close = user,
         seeds = [b"stake", user.key().as_ref()],
         bump = stake_account.bump,
         constraint = stake_account.owner == user.key() @ ErrorCode::InvalidStakeOwnerError,
         has_one = mint
     )]
     pub stake_account: Box<Account<'info, StakeAccount>>,
+
+    #[account(
+        mut,
+        seeds = [b"profile", user.key().as_ref()],
+        bump = user_profile.bump,
+        constraint = user_profile.user == user.key() @ ErrorCode::InvalidStakeOwnerError
+    )]
+    pub user_profile: Box<Account<'info, UserProfile>>,
 
     #[account(
         seeds = [b"config"],
@@ -178,6 +206,37 @@ impl<'info> Claim<'info> {
 
         close_account(cpi_ctx)?;
 
+        // Roll the outcome into the permanent per-user aggregates.
+        if won {
+            self.user_profile.challenges_completed =
+                self.user_profile.challenges_completed.saturating_add(1);
+            self.user_profile.current_streak =
+                self.user_profile.current_streak.saturating_add(1);
+            self.user_profile.longest_streak = self
+                .user_profile
+                .longest_streak
+                .max(self.user_profile.current_streak);
+        } else {
+            self.user_profile.challenges_failed =
+                self.user_profile.challenges_failed.saturating_add(1);
+            self.user_profile.current_streak = 0;
+        }
+
+        emit!(ChallengeSettled {
+            user: self.user.key(),
+            mint: self.mint.key(),
+            staked_amount: self.stake_account.staked_amount,
+            total_days: self.stake_account.total_days,
+            days_goal_met: self.stake_account.days_goal_met,
+            goal_per_day: self.stake_account.goal_per_day,
+            won,
+            staked_at: self.stake_account.staked_at,
+            settled_at: now,
+        });
+
+        // Kept even though `close = user` makes the account unreadable
+        // afterwards: it is the guard that still holds if a future change ever
+        // stops closing the account, e.g. a partial-claim path.
         self.stake_account.claimed = true;
 
         Ok(())

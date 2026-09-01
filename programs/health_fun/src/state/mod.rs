@@ -9,3 +9,6 @@ pub use health_data::*;
 
 pub mod treasury_config;
 pub use treasury_config::*;
+
+pub mod user_profile;
+pub use user_profile::*;

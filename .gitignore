@@ -6,3 +6,6 @@ node_modules
 test-ledger
 .yarn
 to-do.md
+# iCloud sync conflict copies: "<name> 2.ts". The space before the digit is
+# what makes this safe; it will not match a legitimate name like "sha256.ts".
+* [0-9].*
