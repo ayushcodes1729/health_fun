@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{TokenInterface, TokenAccount, Mint, transfer_checked, TransferChecked};
 
-use crate::{StakeAccount, StakeConfig};
+use crate::{StakeAccount, StakeConfig, UserProfile};
 use crate::stake_account::Goal;
 use crate::error::ErrorCode;
 
@@ -24,6 +24,17 @@ pub struct Stake<'info>{
         bump = stake_config.bump
     )]
     pub stake_config: Account<'info, StakeConfig>,
+
+    // Created on the user's first challenge and reused thereafter; it outlives
+    // every StakeAccount, which is closed on claim.
+    #[account(
+        init_if_needed,
+        payer = user,
+        space = 8 + UserProfile::INIT_SPACE,
+        seeds = [b"profile", user.key().as_ref()],
+        bump
+    )]
+    pub user_profile: Account<'info, UserProfile>,
 
     #[account(
         mint::token_program = token_program
@@ -94,6 +105,15 @@ impl<'info> Stake<'info> {
             claimed: false,
             bump: bumps.stake_account
         });
+
+        if self.user_profile.is_fresh() {
+            self.user_profile.initialize(self.user.key(), bumps.user_profile);
+        }
+
+        self.user_profile.total_staked = self
+            .user_profile
+            .total_staked
+            .saturating_add(staked_amount);
 
         // Fund the vault in the same instruction that creates the challenge.
         // While funding was a separate step, a user could create a challenge,

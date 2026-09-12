@@ -10,3 +10,4 @@ export * from './healthData';
 export * from './stakeAccount';
 export * from './stakeConfig';
 export * from './treasuryConfig';
+export * from './userProfile';

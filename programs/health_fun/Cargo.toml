@@ -21,7 +21,10 @@ custom-panic = []
 
 
 [dependencies]
-anchor-lang = "0.32.1"
+# init-if-needed lets `stake` create the user's profile on their first challenge
+# instead of requiring a separate setup transaction. Safe here: the profile PDA
+# has fixed seeds and `init_stake` only writes its fields when it is new.
+anchor-lang = { version = "0.32.1", features = ["init-if-needed"] }
 anchor-spl = "0.32.1"
 solana-program = "4.0.0"
 

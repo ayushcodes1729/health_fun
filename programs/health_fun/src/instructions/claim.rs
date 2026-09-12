@@ -4,22 +4,59 @@ use anchor_spl::token_interface::{
     TransferChecked
 };
 
-use crate::{StakeAccount, TreasuryConfig};
+use crate::{StakeAccount, TreasuryConfig, UserProfile};
 use crate::error::ErrorCode;
+
+/// Emitted on settlement. The StakeAccount is closed straight afterwards, so
+/// this is the only per-challenge record that survives; the backend indexes it
+/// to build history, streaks and leaderboards.
+#[event]
+pub struct ChallengeSettled {
+    pub user: Pubkey,
+    pub mint: Pubkey,
+    pub staked_amount: u64,
+    pub total_days: u16,
+    pub days_goal_met: u16,
+    pub goal_per_day: u32,
+    pub won: bool,
+    pub staked_at: i64,
+    pub settled_at: i64,
+}
 
 #[derive(Accounts)]
 pub struct Claim<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
+    // Closed here: the challenge is over, so its rent goes back to the user and
+    // the PDA is freed for their next challenge. Settlement detail survives in
+    // the ChallengeSettled event and the aggregates on user_profile.
     #[account(
         mut,
+        close = user,
         seeds = [b"stake", user.key().as_ref()],
         bump = stake_account.bump,
         constraint = stake_account.owner == user.key() @ ErrorCode::InvalidStakeOwnerError,
         has_one = mint
     )]
     pub stake_account: Box<Account<'info, StakeAccount>>,
+
+    // `init_if_needed` rather than a plain `mut`: a challenge created before
+    // UserProfile existed has no profile, and `stake` — the only other place
+    // one is created — cannot run while that challenge's StakeAccount exists.
+    // Without this, such a stake could never be claimed and its funds would be
+    // locked forever. The constraint must admit the zeroed key of a profile
+    // this instruction has just created.
+    #[account(
+        init_if_needed,
+        payer = user,
+        space = 8 + UserProfile::INIT_SPACE,
+        seeds = [b"profile", user.key().as_ref()],
+        bump,
+        constraint = user_profile.is_fresh() || user_profile.user == user.key()
+            @ ErrorCode::InvalidStakeOwnerError
+    )]
+    pub user_profile: Box<Account<'info, UserProfile>>,
 
     #[account(
         seeds = [b"config"],
@@ -67,10 +104,13 @@ pub struct Claim<'info> {
     pub mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub token_program: Interface<'info, TokenInterface>,
+
+    // Required by init_if_needed on user_profile.
+    pub system_program: Program<'info, System>,
 }
 
 impl<'info> Claim<'info> {
-    pub fn claim(&mut self) -> Result<()> {
+    pub fn claim(&mut self, bumps: &ClaimBumps) -> Result<()> {
         require_keys_eq!(
             self.treasury_vault.key(),
             self.treasury_config.vault,
@@ -178,6 +218,45 @@ impl<'info> Claim<'info> {
 
         close_account(cpi_ctx)?;
 
+        // A profile this instruction just created belongs to a challenge that
+        // predates UserProfile. Its stake was never counted at stake time, so
+        // count it here to keep lifetime totals honest.
+        if self.user_profile.is_fresh() {
+            self.user_profile.initialize(self.user.key(), bumps.user_profile);
+            self.user_profile.total_staked = self.stake_account.staked_amount;
+        }
+
+        // Roll the outcome into the permanent per-user aggregates.
+        if won {
+            self.user_profile.challenges_completed =
+                self.user_profile.challenges_completed.saturating_add(1);
+            self.user_profile.current_streak =
+                self.user_profile.current_streak.saturating_add(1);
+            self.user_profile.longest_streak = self
+                .user_profile
+                .longest_streak
+                .max(self.user_profile.current_streak);
+        } else {
+            self.user_profile.challenges_failed =
+                self.user_profile.challenges_failed.saturating_add(1);
+            self.user_profile.current_streak = 0;
+        }
+
+        emit!(ChallengeSettled {
+            user: self.user.key(),
+            mint: self.mint.key(),
+            staked_amount: self.stake_account.staked_amount,
+            total_days: self.stake_account.total_days,
+            days_goal_met: self.stake_account.days_goal_met,
+            goal_per_day: self.stake_account.goal_per_day,
+            won,
+            staked_at: self.stake_account.staked_at,
+            settled_at: now,
+        });
+
+        // Kept even though `close = user` makes the account unreadable
+        // afterwards: it is the guard that still holds if a future change ever
+        // stops closing the account, e.g. a partial-claim path.
         self.stake_account.claimed = true;
 
         Ok(())

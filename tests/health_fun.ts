@@ -21,6 +21,7 @@ import {
   findStakeConfigPda,
   findTreasuryAuthorityPda,
   findTreasuryConfigPda,
+  findProfilePda,
   findUserPdas,
   makeEd25519VerifyIx,
 } from "./helpers/attestation";
@@ -57,6 +58,7 @@ type Challenge = {
   stakePda: web3.PublicKey;
   vaultPda: web3.PublicKey;
   healthPda: web3.PublicKey;
+  profilePda: web3.PublicKey;
   treasuryConfigPda: web3.PublicKey;
   treasuryAuthorityPda: web3.PublicKey;
   treasuryVault: web3.PublicKey;
@@ -238,6 +240,7 @@ async function createChallenge(ctx: Ctx, mintAmount: number): Promise<Challenge>
     stakePda,
     vaultPda,
     healthPda,
+    profilePda: findProfilePda(ctx.program.programId, user.publicKey),
     treasuryConfigPda,
     treasuryAuthorityPda,
     treasuryVault,
@@ -287,6 +290,7 @@ async function initializeStake(ctx: Ctx, c: Challenge, totalDays: number) {
         user: c.user.publicKey,
         stakeAccount: c.stakePda,
         stakeConfig: ctx.stakeConfigPda,
+        userProfile: c.profilePda,
         mint: c.mint,
         vault: c.vaultPda,
         userAta: c.userAta,
@@ -480,6 +484,7 @@ describe("health_fun - web3.js only tests", () => {
             .accountsStrict({
               user: c.user.publicKey,
               stakeAccount: c.stakePda,
+              userProfile: c.profilePda,
               stakeConfig: ctx.stakeConfigPda,
               treasuryConfig: c.treasuryConfigPda,
               vault: c.vaultPda,
@@ -488,6 +493,7 @@ describe("health_fun - web3.js only tests", () => {
               userAta: c.userAta,
               mint: c.mint,
               tokenProgram: TOKEN_PROGRAM_ID,
+              systemProgram: web3.SystemProgram.programId,
             })
             .signers([c.user])
             .rpc({ commitment: "confirmed" })

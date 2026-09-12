@@ -37,6 +37,7 @@ export type StakeInstructionAccounts = {
   user: Signer;
   stakeAccount?: PublicKey | Pda;
   stakeConfig?: PublicKey | Pda;
+  userProfile?: PublicKey | Pda;
   mint: PublicKey | Pda;
   vault?: PublicKey | Pda;
   userAta?: PublicKey | Pda;
@@ -109,24 +110,29 @@ export function stake(
       isWritable: false as boolean,
       value: input.stakeConfig ?? null,
     },
-    mint: { index: 3, isWritable: false as boolean, value: input.mint ?? null },
+    userProfile: {
+      index: 3,
+      isWritable: true as boolean,
+      value: input.userProfile ?? null,
+    },
+    mint: { index: 4, isWritable: false as boolean, value: input.mint ?? null },
     vault: {
-      index: 4,
+      index: 5,
       isWritable: true as boolean,
       value: input.vault ?? null,
     },
     userAta: {
-      index: 5,
+      index: 6,
       isWritable: true as boolean,
       value: input.userAta ?? null,
     },
     tokenProgram: {
-      index: 6,
+      index: 7,
       isWritable: false as boolean,
       value: input.tokenProgram ?? null,
     },
     systemProgram: {
-      index: 7,
+      index: 8,
       isWritable: false as boolean,
       value: input.systemProgram ?? null,
     },
@@ -147,6 +153,14 @@ export function stake(
   if (!resolvedAccounts.stakeConfig.value) {
     resolvedAccounts.stakeConfig.value = context.eddsa.findPda(programId, [
       bytes().serialize(new Uint8Array([99, 111, 110, 102, 105, 103])),
+    ]);
+  }
+  if (!resolvedAccounts.userProfile.value) {
+    resolvedAccounts.userProfile.value = context.eddsa.findPda(programId, [
+      bytes().serialize(new Uint8Array([112, 114, 111, 102, 105, 108, 101])),
+      publicKeySerializer().serialize(
+        expectPublicKey(resolvedAccounts.user.value)
+      ),
     ]);
   }
   if (!resolvedAccounts.vault.value) {

@@ -2,7 +2,7 @@
   "license": "ISC",
   "scripts": {
     "generate:codama": "ts-node clients/generate-client.ts",
-    "test:codama": "yarn generate:codama && yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\"",
+    "test:codama": "yarn generate:codama && yarn run ts-mocha -p ./tsconfig.json -t 1000000 --ignore \"tests/**/* [0-9].ts\" --ignore \"tests/**/* [0-9]/**\" \"tests/**/*.ts\"",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
