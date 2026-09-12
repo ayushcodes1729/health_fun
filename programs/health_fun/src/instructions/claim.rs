@@ -41,11 +41,20 @@ pub struct Claim<'info> {
     )]
     pub stake_account: Box<Account<'info, StakeAccount>>,
 
+    // `init_if_needed` rather than a plain `mut`: a challenge created before
+    // UserProfile existed has no profile, and `stake` — the only other place
+    // one is created — cannot run while that challenge's StakeAccount exists.
+    // Without this, such a stake could never be claimed and its funds would be
+    // locked forever. The constraint must admit the zeroed key of a profile
+    // this instruction has just created.
     #[account(
-        mut,
+        init_if_needed,
+        payer = user,
+        space = 8 + UserProfile::INIT_SPACE,
         seeds = [b"profile", user.key().as_ref()],
-        bump = user_profile.bump,
-        constraint = user_profile.user == user.key() @ ErrorCode::InvalidStakeOwnerError
+        bump,
+        constraint = user_profile.is_fresh() || user_profile.user == user.key()
+            @ ErrorCode::InvalidStakeOwnerError
     )]
     pub user_profile: Box<Account<'info, UserProfile>>,
 
@@ -95,10 +104,13 @@ pub struct Claim<'info> {
     pub mint: Box<InterfaceAccount<'info, Mint>>,
 
     pub token_program: Interface<'info, TokenInterface>,
+
+    // Required by init_if_needed on user_profile.
+    pub system_program: Program<'info, System>,
 }
 
 impl<'info> Claim<'info> {
-    pub fn claim(&mut self) -> Result<()> {
+    pub fn claim(&mut self, bumps: &ClaimBumps) -> Result<()> {
         require_keys_eq!(
             self.treasury_vault.key(),
             self.treasury_config.vault,
@@ -205,6 +217,14 @@ impl<'info> Claim<'info> {
         );
 
         close_account(cpi_ctx)?;
+
+        // A profile this instruction just created belongs to a challenge that
+        // predates UserProfile. Its stake was never counted at stake time, so
+        // count it here to keep lifetime totals honest.
+        if self.user_profile.is_fresh() {
+            self.user_profile.initialize(self.user.key(), bumps.user_profile);
+            self.user_profile.total_staked = self.stake_account.staked_amount;
+        }
 
         // Roll the outcome into the permanent per-user aggregates.
         if won {

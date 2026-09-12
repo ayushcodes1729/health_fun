@@ -106,20 +106,8 @@ impl<'info> Stake<'info> {
             bump: bumps.stake_account
         });
 
-        // `init_if_needed` cannot report whether it just created the account, so
-        // detect a fresh one by its zeroed key and only then write the starting
-        // values. Blindly setting them would wipe the running totals every time
-        // a returning user starts another challenge.
-        if self.user_profile.user == Pubkey::default() {
-            self.user_profile.set_inner(UserProfile {
-                user: self.user.key(),
-                challenges_completed: 0,
-                challenges_failed: 0,
-                current_streak: 0,
-                longest_streak: 0,
-                total_staked: 0,
-                bump: bumps.user_profile,
-            });
+        if self.user_profile.is_fresh() {
+            self.user_profile.initialize(self.user.key(), bumps.user_profile);
         }
 
         self.user_profile.total_staked = self

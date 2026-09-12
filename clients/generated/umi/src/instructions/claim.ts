@@ -41,6 +41,7 @@ export type ClaimInstructionAccounts = {
   userAta?: PublicKey | Pda;
   mint: PublicKey | Pda;
   tokenProgram: PublicKey | Pda;
+  systemProgram?: PublicKey | Pda;
 };
 
 // Data.
@@ -122,6 +123,11 @@ export function claim(
       index: 10,
       isWritable: false as boolean,
       value: input.tokenProgram ?? null,
+    },
+    systemProgram: {
+      index: 11,
+      isWritable: false as boolean,
+      value: input.systemProgram ?? null,
     },
   } satisfies ResolvedAccountsWithIndices;
 
@@ -206,6 +212,13 @@ export function claim(
         ),
       ]
     );
+  }
+  if (!resolvedAccounts.systemProgram.value) {
+    resolvedAccounts.systemProgram.value = context.programs.getPublicKey(
+      'systemProgram',
+      '11111111111111111111111111111111'
+    );
+    resolvedAccounts.systemProgram.isWritable = false;
   }
 
   // Accounts in order.

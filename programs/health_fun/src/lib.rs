@@ -62,7 +62,7 @@ pub mod health_fun {
     }
 
     pub fn claim(ctx: Context<Claim>) -> Result<()> {
-        ctx.accounts.claim()?;
+        ctx.accounts.claim(&ctx.bumps)?;
         Ok(())
     }
 }

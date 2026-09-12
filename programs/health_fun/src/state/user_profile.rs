@@ -25,3 +25,24 @@ pub struct UserProfile {
     pub total_staked: u64,
     pub bump: u8,
 }
+
+impl UserProfile {
+    /// True for an account `init_if_needed` has just created: Anchor zeroes the
+    /// data, so `user` is still the default key. Existing profiles always hold
+    /// the owner's key. `init_if_needed` itself cannot report which case
+    /// occurred, and writing starting values into an existing profile would
+    /// wipe the running totals.
+    pub fn is_fresh(&self) -> bool {
+        self.user == Pubkey::default()
+    }
+
+    pub fn initialize(&mut self, user: Pubkey, bump: u8) {
+        self.user = user;
+        self.challenges_completed = 0;
+        self.challenges_failed = 0;
+        self.current_streak = 0;
+        self.longest_streak = 0;
+        self.total_staked = 0;
+        self.bump = bump;
+    }
+}

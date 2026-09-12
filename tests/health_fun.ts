@@ -493,6 +493,7 @@ describe("health_fun - web3.js only tests", () => {
               userAta: c.userAta,
               mint: c.mint,
               tokenProgram: TOKEN_PROGRAM_ID,
+              systemProgram: web3.SystemProgram.programId,
             })
             .signers([c.user])
             .rpc({ commitment: "confirmed" })

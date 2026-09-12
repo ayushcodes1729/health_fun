@@ -364,6 +364,7 @@ function claim(w: World) {
           userAta: w.userAta,
           mint: w.mint,
           tokenProgram: TOKEN_PROGRAM_ID,
+          systemProgram: web3.SystemProgram.programId,
         },
       }),
     ],
@@ -826,6 +827,52 @@ describe("health_fun - claim paths (LiteSVM, controlled clock)", () => {
     expect(profile.currentStreak).to.equal(0);
     // A loss resets the current streak but must not lower the best one.
     expect(profile.longestStreak).to.equal(1);
+  });
+
+  it("claims a stake created before UserProfile existed", () => {
+    const w = setupWorld();
+
+    // Simulate a challenge that predates this program version: the stake and
+    // vault exist, but the profile does not. Removing it after setup is the
+    // closest LiteSVM gets to an on-chain account written by the old layout.
+    w.svm.setAccount(w.profilePda, {
+      lamports: 0,
+      data: new Uint8Array(0),
+      owner: web3.SystemProgram.programId,
+      executable: false,
+    });
+    expect(w.svm.getAccount(w.profilePda)).to.satisfy(
+      (a: any) => a === null || a.lamports === 0
+    );
+
+    for (let day = 1; day <= TOTAL_DAYS; day += 1) {
+      attestDay(w, {
+        day,
+        steps: 7_500,
+        timestamp: START_TIMESTAMP + day * 86400,
+      });
+    }
+
+    const userBefore = tokenBalance(w.svm, w.userAta);
+    setClock(w.svm, START_TIMESTAMP + (TOTAL_DAYS + 1) * 86400);
+
+    // Before the fix this failed with AccountNotInitialized on user_profile,
+    // and nothing else could create the profile, so the funds were locked.
+    claim(w);
+
+    expect(tokenBalance(w.svm, w.userAta)).to.equal(
+      userBefore + BigInt(STAKE_AMOUNT)
+    );
+
+    // claim created the profile and back-filled the stake it was settling.
+    const profile = w.program.coder.accounts.decode(
+      "userProfile",
+      Buffer.from(w.svm.getAccount(w.profilePda)!.data)
+    );
+    expect(profile.user.toBase58()).to.equal(w.user.publicKey.toBase58());
+    expect(profile.challengesCompleted).to.equal(1);
+    expect(profile.currentStreak).to.equal(1);
+    expect(profile.totalStaked.toString()).to.equal(String(STAKE_AMOUNT));
   });
 
   it("rejects a second claim", () => {

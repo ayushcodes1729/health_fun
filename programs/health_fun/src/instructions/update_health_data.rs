@@ -46,6 +46,12 @@ pub struct UpdateHealthData<'info> {
     )]
     pub stake_config: Account<'info, StakeConfig>,
 
+    // ORACLE CONTRACT: this account only exists while a challenge is active.
+    // `claim` closes it, so for any user between challenges this instruction
+    // fails with AccountNotInitialized. The oracle service must check for an
+    // active stake before submitting and skip users without one, rather than
+    // treating that failure as an error. Health data is therefore recorded only
+    // during an active challenge; HealthData is not a continuous health log.
     #[account(
         mut,
         seeds = [b"stake", user.key().as_ref()],
