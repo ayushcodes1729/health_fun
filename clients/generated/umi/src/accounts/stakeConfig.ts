@@ -43,7 +43,17 @@ export type StakeConfigAccountData = {
   /** Shortest permitted challenge, as a DURATION IN SECONDS (not a timestamp). */
   minLockDuration: bigint;
   bump: number;
+  /**
+   * The oracle's ed25519 signing key. Rotatable via `update_config`; the
+   * new key takes effect for the next attestation of every user at once.
+   */
   verificationKey: PublicKey;
+  /**
+   * Authority for `update_config`, `withdraw_treasury` and treasury setup.
+   * Set from the `ADMIN_KEY` bootstrap signer at `initialize_config` and
+   * rotatable afterwards, so the compiled-in key is only needed once.
+   */
+  admin: PublicKey;
 };
 
 export type StakeConfigAccountDataArgs = {
@@ -56,7 +66,17 @@ export type StakeConfigAccountDataArgs = {
   /** Shortest permitted challenge, as a DURATION IN SECONDS (not a timestamp). */
   minLockDuration: number | bigint;
   bump: number;
+  /**
+   * The oracle's ed25519 signing key. Rotatable via `update_config`; the
+   * new key takes effect for the next attestation of every user at once.
+   */
   verificationKey: PublicKey;
+  /**
+   * Authority for `update_config`, `withdraw_treasury` and treasury setup.
+   * Set from the `ADMIN_KEY` bootstrap signer at `initialize_config` and
+   * rotatable afterwards, so the compiled-in key is only needed once.
+   */
+  admin: PublicKey;
 };
 
 export function getStakeConfigAccountDataSerializer(): Serializer<
@@ -72,6 +92,7 @@ export function getStakeConfigAccountDataSerializer(): Serializer<
         ['minLockDuration', i64()],
         ['bump', u8()],
         ['verificationKey', publicKeySerializer()],
+        ['admin', publicKeySerializer()],
       ],
       { description: 'StakeConfigAccountData' }
     ),
@@ -155,6 +176,7 @@ export function getStakeConfigGpaBuilder(
       minLockDuration: number | bigint;
       bump: number;
       verificationKey: PublicKey;
+      admin: PublicKey;
     }>({
       discriminator: [0, bytes({ size: 8 })],
       maxStake: [8, u64()],
@@ -162,6 +184,7 @@ export function getStakeConfigGpaBuilder(
       minLockDuration: [24, i64()],
       bump: [32, u8()],
       verificationKey: [33, publicKeySerializer()],
+      admin: [65, publicKeySerializer()],
     })
     .deserializeUsing<StakeConfig>((account) => deserializeStakeConfig(account))
     .whereField(

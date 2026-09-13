@@ -11,4 +11,6 @@ export * from './initializeConfig';
 export * from './initializeHealthData';
 export * from './initializeTreasuryForMint';
 export * from './stake';
+export * from './updateConfig';
 export * from './updateHealthData';
+export * from './withdrawTreasury';

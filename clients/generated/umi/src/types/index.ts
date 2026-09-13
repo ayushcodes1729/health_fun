@@ -7,4 +7,5 @@
  */
 
 export * from './attestationData';
+export * from './configParams';
 export * from './goal';

@@ -15,3 +15,9 @@ pub use claim::*;
 
 pub mod initialize_treasury_for_mint;
 pub use initialize_treasury_for_mint::*;
+
+pub mod update_config;
+pub use update_config::*;
+
+pub mod withdraw_treasury;
+pub use withdraw_treasury::*;

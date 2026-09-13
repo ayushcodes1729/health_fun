@@ -36,12 +36,15 @@ impl<'info> InitializeConfig<'info> {
             ErrorCode::InvalidAdminError
         );
 
+        StakeConfig::validate_bounds(max_stake, min_lock_duration, max_lock_duration)?;
+
         self.stake_config.set_inner(StakeConfig {
             max_stake,
             max_lock_duration,
             min_lock_duration,
             verification_key,
             bump: bumps.stake_config,
+            admin: self.admin.key(),
         });
 
         Ok(())

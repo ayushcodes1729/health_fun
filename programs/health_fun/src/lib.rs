@@ -65,4 +65,14 @@ pub mod health_fun {
         ctx.accounts.claim(&ctx.bumps)?;
         Ok(())
     }
+
+    pub fn update_config(ctx: Context<UpdateConfig>, params: ConfigParams) -> Result<()> {
+        ctx.accounts.update_config(params)?;
+        Ok(())
+    }
+
+    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
+        ctx.accounts.withdraw_treasury(amount)?;
+        Ok(())
+    }
 }
