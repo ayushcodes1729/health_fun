@@ -8,6 +8,7 @@
 
 export * from './acceptAdmin';
 export * from './claim';
+export * from './closeLegacyConfig';
 export * from './initializeConfig';
 export * from './initializeHealthData';
 export * from './initializeTreasuryForMint';

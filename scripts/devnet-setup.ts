@@ -108,6 +108,24 @@ async function main() {
     [Buffer.from("config")],
     program.programId
   );
+  // A config written by an earlier program version cannot be deserialised by
+  // the current one (it is shorter than the current layout). Close it first so
+  // initialize_config can re-create it. Only a legacy-sized account can be
+  // closed this way; a current one is refused by the program.
+  const CURRENT_CONFIG_SIZE = 8 + 8 + 8 + 8 + 1 + 32 + 32 + 32;
+  const rawCfg = await conn.getAccountInfo(stakeConfigPda);
+  if (rawCfg && rawCfg.data.length < CURRENT_CONFIG_SIZE) {
+    console.log(
+      `config is a legacy layout (${rawCfg.data.length} bytes < ${CURRENT_CONFIG_SIZE}); closing it…`
+    );
+    await program.methods
+      .closeLegacyConfig()
+      .accountsStrict({ admin: admin.publicKey, stakeConfig: stakeConfigPda })
+      .signers([admin])
+      .rpc();
+    console.log("legacy config closed");
+  }
+
   const cfg = await program.account.stakeConfig.fetchNullable(stakeConfigPda);
   if (cfg) {
     console.log(`config exists; oracle=${cfg.verificationKey.toBase58()} admin=${cfg.admin.toBase58()}`);

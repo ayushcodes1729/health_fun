@@ -57,6 +57,15 @@ function currentParams(w: World) {
   };
 }
 
+function currentParamsRaw() {
+  return {
+    maxStake: MAX_STAKE,
+    minLockDuration: MIN_LOCK_DURATION,
+    maxLockDuration: MAX_LOCK_DURATION,
+    verificationKey: web3.Keypair.generate().publicKey,
+  };
+}
+
 function updateConfig(w: World, signer: web3.Keypair, params: any) {
   send(
     w.svm,
@@ -147,6 +156,89 @@ describe("health_fun - admin (LiteSVM)", () => {
       expect(decodeConfig(w).admin.toBase58()).to.equal(
         w.admin.publicKey.toBase58()
       );
+    });
+  });
+
+  describe("close_legacy_config", () => {
+    function closeLegacy(w: World, signer: web3.Keypair) {
+      send(
+        w.svm,
+        [
+          w.program.instruction.closeLegacyConfig({
+            accounts: { admin: signer.publicKey, stakeConfig: w.stakeConfigPda },
+          }),
+        ],
+        signer,
+        [signer]
+      );
+    }
+
+    /** Overwrites the config with a 65-byte account, the pre-admin layout. */
+    function installLegacyConfig(w: World) {
+      const current = w.svm.getAccount(w.stakeConfigPda)!;
+      w.svm.setAccount(w.stakeConfigPda, {
+        lamports: current.lamports,
+        data: Buffer.from(current.data).subarray(0, 65),
+        owner: w.programId,
+        executable: false,
+      });
+    }
+
+    it("closes a legacy-layout config so initialize_config can run again", () => {
+      const w = setupWorld();
+      installLegacyConfig(w);
+
+      // The upgraded program can no longer read it: every admin instruction
+      // fails at deserialisation. This is the state devnet was found in.
+      expect(() => updateConfig(w, w.admin, currentParamsRaw())).to.throw(
+        /AccountDidNotDeserialize/i
+      );
+
+      const before = w.svm.getBalance(w.admin.publicKey)!;
+      closeLegacy(w, w.admin);
+      expect(w.svm.getAccount(w.stakeConfigPda)).to.satisfy(
+        (a: any) => a === null || a.lamports === 0
+      );
+      expect(w.svm.getBalance(w.admin.publicKey)! > before).to.equal(true);
+
+      // And the PDA is free for a fresh, current-layout config.
+      send(
+        w.svm,
+        [
+          w.program.instruction.initializeConfig(
+            MAX_STAKE,
+            MAX_LOCK_DURATION,
+            MIN_LOCK_DURATION,
+            w.admin.publicKey,
+            {
+              accounts: {
+                admin: w.admin.publicKey,
+                stakeConfig: w.stakeConfigPda,
+                systemProgram: web3.SystemProgram.programId,
+              },
+            }
+          ),
+        ],
+        w.admin,
+        [w.admin]
+      );
+      expect(decodeConfig(w).admin.toBase58()).to.equal(w.admin.publicKey.toBase58());
+    });
+
+    it("refuses to close a current-layout config", () => {
+      // The size guard is what stops this from being a backdoor around the
+      // two-step admin transfer: a live config is never closable this way.
+      const w = setupWorld();
+      expect(() => closeLegacy(w, w.admin)).to.throw(/InvalidConfig/i);
+      expect(decodeConfig(w).admin.toBase58()).to.equal(w.admin.publicKey.toBase58());
+    });
+
+    it("rejects a signer other than the bootstrap ADMIN_KEY", () => {
+      const w = setupWorld();
+      installLegacyConfig(w);
+      const intruder = web3.Keypair.generate();
+      w.svm.airdrop(intruder.publicKey, BigInt(web3.LAMPORTS_PER_SOL));
+      expect(() => closeLegacy(w, intruder)).to.throw(/InvalidAdmin/i);
     });
   });
 
