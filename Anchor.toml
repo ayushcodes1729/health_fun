@@ -6,7 +6,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-health_fun = "DADe3TShkZZnA8hvpMMUNmgGDe7LGwQbXZ2KDe2hTTXJ"
+health_fun = "AurTvci86g6Wx95U93zQtonzV3CwHq7Ehpw9chS1oqCa"
 
 [programs.localnet]
 health_fun = "AurTvci86g6Wx95U93zQtonzV3CwHq7Ehpw9chS1oqCa"
