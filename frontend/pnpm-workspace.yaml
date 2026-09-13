@@ -1,3 +1,15 @@
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+# Explicit per-package decision on native build scripts (pnpm 11 refuses to
+# run any without one). sharp/unrs-resolver are Next.js accelerators;
+# bufferutil/utf-8-validate/bigint-buffer speed up web3.js. Ledger USB,
+# Stellar and the rest are transitive deps of wallet adapters we don't use.
+allowBuilds:
+  '@stellar/stellar-sdk': false
+  bigint-buffer: true
+  blake-hash: false
+  bufferutil: true
+  protobufjs: false
+  sharp: true
+  tiny-secp256k1: false
+  unrs-resolver: true
+  usb: false
+  utf-8-validate: true

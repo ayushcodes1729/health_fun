@@ -4,7 +4,8 @@
     "generate:codama": "ts-node clients/generate-client.ts",
     "test:codama": "yarn generate:codama && yarn run ts-mocha -p ./tsconfig.json -t 1000000 --ignore \"tests/**/* [0-9].ts\" --ignore \"tests/**/* [0-9]/**\" \"tests/**/*.ts\"",
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
-    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
+    "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
+    "sync:idl": "cp target/idl/health_fun.json frontend/lib/idl/health_fun.json && cp target/types/health_fun.ts frontend/lib/idl/health_fun.ts"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.32.1",
@@ -22,6 +23,7 @@
     "@types/chai": "^4.3.0",
     "@types/mocha": "^9.0.0",
     "@types/node": "^25.6.0",
+    "bs58": "^6",
     "chai": "^4.3.4",
     "litesvm": "0.8.0",
     "mocha": "^9.0.3",

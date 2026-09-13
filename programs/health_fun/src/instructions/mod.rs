@@ -24,3 +24,6 @@ pub use withdraw_treasury::*;
 
 pub mod transfer_admin;
 pub use transfer_admin::*;
+
+pub mod close_legacy_config;
+pub use close_legacy_config::*;

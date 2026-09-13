@@ -85,4 +85,9 @@ pub mod health_fun {
         ctx.accounts.accept_admin()?;
         Ok(())
     }
+
+    pub fn close_legacy_config(ctx: Context<CloseLegacyConfig>) -> Result<()> {
+        ctx.accounts.close_legacy_config()?;
+        Ok(())
+    }
 }
