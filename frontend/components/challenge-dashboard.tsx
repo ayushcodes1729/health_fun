@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-import { useActions } from "@/hooks/use-actions";
+import { useActions, type StepsPreview } from "@/hooks/use-actions";
 import { useChallenge } from "@/hooks/use-challenge";
 import {
   SECONDS_PER_DAY,
@@ -55,7 +55,7 @@ export function ChallengeDashboard() {
       {challenge.error ? <Notice kind="error">{challenge.error}</Notice> : null}
       {actions.lastSignature ? (
         <Notice kind="success">
-          Confirmed:{" "}
+          {actions.lastMessage ? `${actions.lastMessage} · ` : ""}Confirmed:{" "}
           <a
             className="underline"
             href={`https://explorer.solana.com/tx/${actions.lastSignature}?cluster=devnet`}
@@ -146,6 +146,7 @@ export function ChallengeDashboard() {
           nowSec={nowSec}
           todayEpochDay={todayEpochDay}
           busy={actions.busy}
+          previewSteps={actions.previewSteps}
           onSync={() => void actions.sync()}
           onClaim={() => void actions.claim()}
         />
@@ -251,6 +252,7 @@ function ActiveChallenge({
   nowSec,
   todayEpochDay,
   busy,
+  previewSteps,
   onSync,
   onClaim,
 }: {
@@ -260,6 +262,7 @@ function ActiveChallenge({
   nowSec: number;
   todayEpochDay: number;
   busy: string | null;
+  previewSteps: () => Promise<StepsPreview | { error: string }>;
   onSync: () => void;
   onClaim: () => void;
 }) {
@@ -270,6 +273,36 @@ function ActiveChallenge({
   const yesterdaySynced = healthEpochDay >= yesterday;
   const lastCountableDay = Math.floor(unlockAt / SECONDS_PER_DAY);
   const daysRemaining = Math.max(0, Math.ceil((unlockAt - nowSec) / SECONDS_PER_DAY));
+
+  // What Google Fit reports for yesterday. Shown before the user commits,
+  // because an attested day can never be re-attested.
+  const [preview, setPreview] = useState<StepsPreview | { error: string } | null>(null);
+  useEffect(() => {
+    if (unlocked || yesterdaySynced) return;
+    let active = true;
+    setPreview(null);
+    void previewSteps().then((p) => {
+      if (active) setPreview(p);
+    });
+    return () => {
+      active = false;
+    };
+  }, [previewSteps, unlocked, yesterdaySynced, healthEpochDay]);
+
+  const previewSteps_ = preview && !("error" in preview) ? preview.steps : null;
+  const goalMet = previewSteps_ !== null && previewSteps_ >= stake.goalPerDay;
+
+  const confirmAndSync = () => {
+    if (previewSteps_ !== null && !goalMet) {
+      const ok = window.confirm(
+        `Google Fit reports ${previewSteps_.toLocaleString()} steps for yesterday, below your ${stake.goalPerDay.toLocaleString()}-step goal. ` +
+          `Syncing will record this day as missed and the challenge cannot be won. ` +
+          `If Google Fit hasn't finished syncing from your phone, wait and try later. Sync anyway?`
+      );
+      if (!ok) return;
+    }
+    onSync();
+  };
 
   return (
     <Card eyebrow="Active challenge" title={`${stake.daysGoalMet} of ${stake.totalDays} days met`}>
@@ -295,8 +328,27 @@ function ActiveChallenge({
               Last synced day: {healthEpochDay > 0 ? `epoch day ${healthEpochDay} (${lastSteps.toLocaleString()} steps)` : "none yet"}
               {yesterday > lastCountableDay ? " · challenge window has ended" : ""}
             </p>
+            {!yesterdaySynced ? (
+              <div className="mt-3 rounded-xl bg-white/10 px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                  Google Fit · yesterday (UTC)
+                </p>
+                {preview === null ? (
+                  <p className="mt-1 text-slate-300">Checking…</p>
+                ) : "error" in preview ? (
+                  <p className="mt-1 text-amber-300">{preview.error}</p>
+                ) : (
+                  <p className={`mt-1 text-lg font-semibold tabular-nums ${goalMet ? "text-emerald-300" : "text-amber-300"}`}>
+                    {preview.steps.toLocaleString()} steps
+                    <span className="ml-2 text-sm font-normal text-slate-300">
+                      {goalMet ? "· goal met" : `· below ${stake.goalPerDay.toLocaleString()}`}
+                    </span>
+                  </p>
+                )}
+              </div>
+            ) : null}
             <div className="mt-4">
-              <Button onClick={onSync} disabled={busy !== null || yesterdaySynced}>
+              <Button onClick={confirmAndSync} disabled={busy !== null || yesterdaySynced || preview === null || "error" in preview}>
                 {busy === "Syncing steps"
                   ? "Syncing…"
                   : yesterdaySynced

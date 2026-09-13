@@ -66,28 +66,33 @@ export function attestationFromJson(j: AttestationJson): Attestation {
 }
 
 export function buildAttestationMessage(a: Attestation): Buffer {
-  const buf = Buffer.alloc(9 + 32 + 8 + 2 + 4 + 1 + 1 + 8 + 8);
+  // Written with DataView rather than Buffer's BigInt methods: the Buffer
+  // polyfill Next.js ships to the browser lacks writeBigUInt64LE, so the
+  // Node-only version crashed the sync in the browser while passing every
+  // server-side test.
+  const bytes = new Uint8Array(9 + 32 + 8 + 2 + 4 + 1 + 1 + 8 + 8);
+  const view = new DataView(bytes.buffer);
   let o = 0;
 
-  buf.write("HEALTH_V1", o, "ascii");
+  bytes.set(new TextEncoder().encode("HEALTH_V1"), o);
   o += 9;
-  a.user.toBuffer().copy(buf, o);
+  bytes.set(a.user.toBytes(), o);
   o += 32;
-  buf.writeBigUInt64LE(a.challengeId, o);
+  view.setBigUint64(o, a.challengeId, true);
   o += 8;
-  buf.writeUInt16LE(a.epochDay, o);
+  view.setUint16(o, a.epochDay, true);
   o += 2;
-  buf.writeUInt32LE(a.steps, o);
+  view.setUint32(o, a.steps, true);
   o += 4;
-  buf.writeUInt8(a.sleepHours, o);
+  view.setUint8(o, a.sleepHours);
   o += 1;
-  buf.writeUInt8(a.gym ? 1 : 0, o);
+  view.setUint8(o, a.gym ? 1 : 0);
   o += 1;
-  buf.writeBigUInt64LE(a.nonce, o);
+  view.setBigUint64(o, a.nonce, true);
   o += 8;
-  buf.writeBigInt64LE(a.expiresAt, o);
+  view.setBigInt64(o, a.expiresAt, true);
 
-  return buf;
+  return Buffer.from(bytes);
 }
 
 /** Signs on the server. Never call this in the browser. */
@@ -105,31 +110,32 @@ export function signAttestation(
  */
 export function buildEd25519VerifyInstruction(
   oraclePubkey: PublicKey,
-  message: Buffer,
+  message: Uint8Array,
   signature: Uint8Array
 ): TransactionInstruction {
   const SIG_OFF = 16;
   const PK_OFF = SIG_OFF + 64;
   const MSG_OFF = PK_OFF + 32;
 
-  const data = Buffer.alloc(MSG_OFF + message.length);
-  data.writeUInt8(1, 0);
-  data.writeUInt8(0, 1);
-  data.writeUInt16LE(SIG_OFF, 2);
-  data.writeUInt16LE(0xffff, 4);
-  data.writeUInt16LE(PK_OFF, 6);
-  data.writeUInt16LE(0xffff, 8);
-  data.writeUInt16LE(MSG_OFF, 10);
-  data.writeUInt16LE(message.length, 12);
-  data.writeUInt16LE(0xffff, 14);
+  const data = new Uint8Array(MSG_OFF + message.length);
+  const view = new DataView(data.buffer);
+  view.setUint8(0, 1);
+  view.setUint8(1, 0);
+  view.setUint16(2, SIG_OFF, true);
+  view.setUint16(4, 0xffff, true);
+  view.setUint16(6, PK_OFF, true);
+  view.setUint16(8, 0xffff, true);
+  view.setUint16(10, MSG_OFF, true);
+  view.setUint16(12, message.length, true);
+  view.setUint16(14, 0xffff, true);
 
-  Buffer.from(signature).copy(data, SIG_OFF);
-  oraclePubkey.toBuffer().copy(data, PK_OFF);
-  message.copy(data, MSG_OFF);
+  data.set(signature, SIG_OFF);
+  data.set(oraclePubkey.toBytes(), PK_OFF);
+  data.set(message, MSG_OFF);
 
   return new TransactionInstruction({
     programId: ED25519_PROGRAM_ID,
     keys: [],
-    data,
+    data: Buffer.from(data),
   });
 }

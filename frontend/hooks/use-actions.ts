@@ -36,7 +36,11 @@ export type ActionState = {
   busy: string | null;
   error: string | null;
   lastSignature: string | null;
+  /** Human-readable note about the last successful action, e.g. steps synced. */
+  lastMessage: string | null;
 };
+
+export type StepsPreview = { epochDay: number; steps: number };
 
 export type OracleResponse = {
   attestation: AttestationJson;
@@ -57,18 +61,24 @@ export function useActions(onSettled?: () => Promise<void>) {
     busy: null,
     error: null,
     lastSignature: null,
+    lastMessage: null,
   });
 
   const run = useCallback(
-    async (label: string, fn: (user: PublicKey) => Promise<string>) => {
+    async (
+      label: string,
+      fn: (user: PublicKey) => Promise<string | { signature: string; message: string }>
+    ) => {
       if (!publicKey) {
         setState((s) => ({ ...s, error: "Connect a wallet first" }));
         return null;
       }
-      setState({ busy: label, error: null, lastSignature: null });
+      setState({ busy: label, error: null, lastSignature: null, lastMessage: null });
       try {
-        const sig = await fn(publicKey);
-        setState({ busy: null, error: null, lastSignature: sig });
+        const out = await fn(publicKey);
+        const sig = typeof out === "string" ? out : out.signature;
+        const message = typeof out === "string" ? null : out.message;
+        setState({ busy: null, error: null, lastSignature: sig, lastMessage: message });
         await onSettled?.();
         return sig;
       } catch (e) {
@@ -76,12 +86,25 @@ export function useActions(onSettled?: () => Promise<void>) {
           busy: null,
           error: humanizeError(e),
           lastSignature: null,
+          lastMessage: null,
         });
         return null;
       }
     },
     [publicKey, onSettled]
   );
+
+  /** What Google Fit reports for yesterday, without touching the chain. */
+  const previewSteps = useCallback(async (): Promise<StepsPreview | { error: string }> => {
+    if (!publicKey) return { error: "Connect a wallet first" };
+    const res = await fetch("/api/oracle/attest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user: publicKey.toBase58(), preview: true }),
+    });
+    const body = (await res.json()) as StepsPreview | { error: string };
+    return body;
+  }, [publicKey]);
 
   const send = useCallback(
     async (tx: Transaction) => {
@@ -160,10 +183,10 @@ export function useActions(onSettled?: () => Promise<void>) {
 
         const attestation = attestationFromJson(body.attestation);
         const message = buildAttestationMessage(attestation);
-        const signature = Buffer.from(body.signature, "base64");
+        const oracleSignature = Buffer.from(body.signature, "base64");
         const oracle = new PublicKey(body.oraclePubkey);
 
-        const verifyIx = buildEd25519VerifyInstruction(oracle, message, signature);
+        const verifyIx = buildEd25519VerifyInstruction(oracle, message, oracleSignature);
         const updateIx = await program.methods
           .updateHealthData({
             challengeId: new BN(attestation.challengeId.toString()),
@@ -185,7 +208,12 @@ export function useActions(onSettled?: () => Promise<void>) {
           })
           .instruction();
 
-        return send(new Transaction().add(verifyIx).add(updateIx));
+        const txSignature = await send(new Transaction().add(verifyIx).add(updateIx));
+        const day = new Date(attestation.epochDay * 86_400_000).toISOString().slice(0, 10);
+        return {
+          signature: txSignature,
+          message: `Synced ${attestation.steps.toLocaleString()} steps for ${day} (UTC)`,
+        };
       }),
     [program, run, send]
   );
@@ -245,7 +273,7 @@ export function useActions(onSettled?: () => Promise<void>) {
     [run]
   );
 
-  return { ...state, initializeHealth, stake, sync, claim, faucet };
+  return { ...state, initializeHealth, stake, sync, claim, faucet, previewSteps };
 }
 
 /** Pulls the Anchor error name out of a simulation log dump when present. */

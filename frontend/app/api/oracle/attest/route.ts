@@ -32,10 +32,12 @@ import { getProgram } from "@/lib/solana/program";
  */
 export async function POST(request: NextRequest) {
   let user: PublicKey;
+  let preview = false;
   try {
-    const body = (await request.json()) as { user?: string };
+    const body = (await request.json()) as { user?: string; preview?: boolean };
     if (!body.user) throw new Error("missing user");
     user = new PublicKey(body.user);
+    preview = body.preview === true;
   } catch {
     return NextResponse.json({ error: "Invalid or missing wallet address" }, { status: 400 });
   }
@@ -43,6 +45,17 @@ export async function POST(request: NextRequest) {
   const now = Math.floor(Date.now() / 1000);
   const today = Math.floor(now / SECONDS_PER_DAY);
   const epochDay = today - 1;
+
+  // Preview: just report what Google Fit says for yesterday, no signature and
+  // no on-chain checks, so the UI can show the reading before the user
+  // commits it. A day can only be attested once, so seeing it first matters.
+  if (preview) {
+    const result = await fetchStepsForEpochDay(epochDay);
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: 502 });
+    }
+    return NextResponse.json({ epochDay, steps: result.steps });
+  }
 
   // Refuse to sign something the program will reject anyway, with a clearer
   // message than the on-chain error.
