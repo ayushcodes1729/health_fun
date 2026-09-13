@@ -56,4 +56,10 @@ pub enum ErrorCode {
 
     #[msg("Stake amount must be greater than zero")]
     ZeroStakeError,
+
+    #[msg("Config values are invalid: max_stake must be positive and 0 <= min_lock_duration <= max_lock_duration")]
+    InvalidConfigError,
+
+    #[msg("Withdrawal amount must be greater than zero")]
+    ZeroWithdrawalError,
 }

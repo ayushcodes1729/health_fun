@@ -65,4 +65,24 @@ pub mod health_fun {
         ctx.accounts.claim(&ctx.bumps)?;
         Ok(())
     }
+
+    pub fn update_config(ctx: Context<UpdateConfig>, params: ConfigParams) -> Result<()> {
+        ctx.accounts.update_config(params)?;
+        Ok(())
+    }
+
+    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
+        ctx.accounts.withdraw_treasury(amount)?;
+        Ok(())
+    }
+
+    pub fn propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+        ctx.accounts.propose_admin(new_admin)?;
+        Ok(())
+    }
+
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        ctx.accounts.accept_admin()?;
+        Ok(())
+    }
 }

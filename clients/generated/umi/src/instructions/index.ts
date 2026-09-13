@@ -6,9 +6,13 @@
  * @see https://github.com/codama-idl/codama
  */
 
+export * from './acceptAdmin';
 export * from './claim';
 export * from './initializeConfig';
 export * from './initializeHealthData';
 export * from './initializeTreasuryForMint';
+export * from './proposeAdmin';
 export * from './stake';
+export * from './updateConfig';
 export * from './updateHealthData';
+export * from './withdrawTreasury';

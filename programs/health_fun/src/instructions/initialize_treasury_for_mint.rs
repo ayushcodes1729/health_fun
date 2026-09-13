@@ -3,7 +3,6 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use crate::{StakeConfig, TreasuryConfig};
-use crate::constants::ADMIN_KEY;
 use crate::error::ErrorCode;
 
 #[derive(Accounts)]
@@ -13,7 +12,8 @@ pub struct InitializeTreasuryForMint<'info> {
 
     #[account(
         seeds = [b"config"],
-        bump = stake_config.bump
+        bump = stake_config.bump,
+        has_one = admin @ ErrorCode::InvalidAdminError
     )]
     pub stake_config: Account<'info, StakeConfig>,
 
@@ -53,12 +53,6 @@ impl<'info> InitializeTreasuryForMint<'info> {
         &mut self,
         bumps: &InitializeTreasuryForMintBumps,
     ) -> Result<()> {
-        require_eq!(
-            self.admin.key().to_string(),
-            ADMIN_KEY,
-            ErrorCode::InvalidAdminError
-        );
-
         self.treasury_config.set_inner(TreasuryConfig {
             mint: self.mint.key(),
             vault: self.treasury_vault.key(),

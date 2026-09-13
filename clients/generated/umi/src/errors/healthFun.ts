@@ -263,6 +263,36 @@ export class ZeroStakeErrorError extends ProgramError {
 codeToErrorMap.set(0x1781, ZeroStakeErrorError);
 nameToErrorMap.set('ZeroStakeError', ZeroStakeErrorError);
 
+/** InvalidConfigError: Config values are invalid: max_stake must be positive and 0 <= min_lock_duration <= max_lock_duration */
+export class InvalidConfigErrorError extends ProgramError {
+  override readonly name: string = 'InvalidConfigError';
+
+  readonly code: number = 0x1782; // 6018
+
+  constructor(program: Program, cause?: Error) {
+    super(
+      'Config values are invalid: max_stake must be positive and 0 <= min_lock_duration <= max_lock_duration',
+      program,
+      cause
+    );
+  }
+}
+codeToErrorMap.set(0x1782, InvalidConfigErrorError);
+nameToErrorMap.set('InvalidConfigError', InvalidConfigErrorError);
+
+/** ZeroWithdrawalError: Withdrawal amount must be greater than zero */
+export class ZeroWithdrawalErrorError extends ProgramError {
+  override readonly name: string = 'ZeroWithdrawalError';
+
+  readonly code: number = 0x1783; // 6019
+
+  constructor(program: Program, cause?: Error) {
+    super('Withdrawal amount must be greater than zero', program, cause);
+  }
+}
+codeToErrorMap.set(0x1783, ZeroWithdrawalErrorError);
+nameToErrorMap.set('ZeroWithdrawalError', ZeroWithdrawalErrorError);
+
 /**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors
