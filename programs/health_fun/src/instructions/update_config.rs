@@ -12,19 +12,21 @@ pub struct ConfigUpdated {
     pub min_lock_duration: i64,
     pub max_lock_duration: i64,
     pub verification_key: Pubkey,
-    pub new_admin: Pubkey,
 }
 
-/// Full replacement of the mutable config fields. Callers pass every value,
-/// including the ones they are not changing, so a stale client cannot
-/// accidentally revert a field it did not know about.
+/// Full replacement of the mutable limits and the oracle key. Callers pass
+/// every value, including the ones they are not changing, so a stale client
+/// cannot accidentally revert a field it did not know about.
+///
+/// Admin is deliberately not here: it moves via the two-step
+/// `propose_admin` / `accept_admin` so a mistyped key can never take
+/// authority without first proving it can sign.
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug)]
 pub struct ConfigParams {
     pub max_stake: u64,
     pub min_lock_duration: i64,
     pub max_lock_duration: i64,
     pub verification_key: Pubkey,
-    pub admin: Pubkey,
 }
 
 #[derive(Accounts)]
@@ -48,10 +50,13 @@ impl<'info> UpdateConfig<'info> {
             params.max_lock_duration,
         )?;
 
-        // Rotating to the zero key would lock every admin instruction forever.
+        // The zero key is never a legitimate oracle. At best it halts every
+        // attestation until re-rotated; at worst it decodes to a small-order
+        // curve point under which non-strict ed25519 accepts forged
+        // signatures. Rejecting it removes the question either way.
         require!(
-            params.admin != Pubkey::default(),
-            ErrorCode::InvalidAdminError
+            params.verification_key != Pubkey::default(),
+            ErrorCode::InvalidVerificationKeyError
         );
 
         // Existing stakes are unaffected: lock bounds are checked once at stake
@@ -61,7 +66,6 @@ impl<'info> UpdateConfig<'info> {
         self.stake_config.min_lock_duration = params.min_lock_duration;
         self.stake_config.max_lock_duration = params.max_lock_duration;
         self.stake_config.verification_key = params.verification_key;
-        self.stake_config.admin = params.admin;
 
         emit!(ConfigUpdated {
             admin: self.admin.key(),
@@ -69,7 +73,6 @@ impl<'info> UpdateConfig<'info> {
             min_lock_duration: params.min_lock_duration,
             max_lock_duration: params.max_lock_duration,
             verification_key: params.verification_key,
-            new_admin: params.admin,
         });
 
         Ok(())

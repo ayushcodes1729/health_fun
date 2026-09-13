@@ -2,17 +2,23 @@ import * as anchor from "@coral-xyz/anchor";
 import { web3 } from "@coral-xyz/anchor";
 import { expect } from "chai";
 import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  MINT_SIZE,
   TOKEN_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
+  createInitializeMint2Instruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
 
 import {
   INSTRUCTIONS_SYSVAR,
   buildAttestationMessage,
+  findTreasuryAuthorityPda,
+  findTreasuryConfigPda,
   makeEd25519VerifyIx,
 } from "./helpers/attestation";
 import {
+  DECIMALS,
   MAX_LOCK_DURATION,
   MAX_STAKE,
   MIN_LOCK_DURATION,
@@ -48,7 +54,6 @@ function currentParams(w: World) {
     minLockDuration: c.minLockDuration,
     maxLockDuration: c.maxLockDuration,
     verificationKey: c.verificationKey,
-    admin: c.admin,
   };
 }
 
@@ -61,6 +66,32 @@ function updateConfig(w: World, signer: web3.Keypair, params: any) {
           admin: signer.publicKey,
           stakeConfig: w.stakeConfigPda,
         },
+      }),
+    ],
+    signer,
+    [signer]
+  );
+}
+
+function proposeAdmin(w: World, signer: web3.Keypair, newAdmin: web3.PublicKey) {
+  send(
+    w.svm,
+    [
+      w.program.instruction.proposeAdmin(newAdmin, {
+        accounts: { admin: signer.publicKey, stakeConfig: w.stakeConfigPda },
+      }),
+    ],
+    signer,
+    [signer]
+  );
+}
+
+function acceptAdmin(w: World, signer: web3.Keypair) {
+  send(
+    w.svm,
+    [
+      w.program.instruction.acceptAdmin({
+        accounts: { newAdmin: signer.publicKey, stakeConfig: w.stakeConfigPda },
       }),
     ],
     signer,
@@ -147,10 +178,7 @@ describe("health_fun - admin (LiteSVM)", () => {
       w.svm.airdrop(intruder.publicKey, BigInt(web3.LAMPORTS_PER_SOL));
 
       expect(() =>
-        updateConfig(w, intruder, {
-          ...currentParams(w),
-          admin: intruder.publicKey,
-        })
+        updateConfig(w, intruder, currentParams(w))
       ).to.throw(/InvalidAdmin/i);
     });
 
@@ -171,14 +199,27 @@ describe("health_fun - admin (LiteSVM)", () => {
       ).to.throw(/InvalidConfig/i);
     });
 
-    it("rejects rotating admin to the zero key", () => {
+    it("rejects rotating the oracle key to the zero key", () => {
       const w = setupWorld();
       expect(() =>
         updateConfig(w, w.admin, {
           ...currentParams(w),
-          admin: web3.PublicKey.default,
+          verificationKey: web3.PublicKey.default,
         })
-      ).to.throw(/InvalidAdmin/i);
+      ).to.throw(/InvalidVerificationKey/i);
+    });
+
+    it("rejects a max lock duration shorter than the one-day minimum stake", () => {
+      const w = setupWorld();
+      // `stake` requires total_days >= 1, so anything under 86400 makes every
+      // stake impossible. 3600 is what an admin thinking in hours would send.
+      expect(() =>
+        updateConfig(w, w.admin, {
+          ...currentParams(w),
+          minLockDuration: new anchor.BN(0),
+          maxLockDuration: new anchor.BN(3600),
+        })
+      ).to.throw(/InvalidConfig/i);
     });
 
     it("rotates the oracle key: old key rejected, new key accepted", () => {
@@ -235,22 +276,42 @@ describe("health_fun - admin (LiteSVM)", () => {
       expect(health.steps).to.equal(7_500);
     });
 
-    it("rotates admin: old admin locked out, new admin in control", () => {
+    it("transfers admin in two steps; nothing moves until the new key signs", () => {
       const w = setupWorld();
       const newAdmin = web3.Keypair.generate();
       w.svm.airdrop(newAdmin.publicKey, BigInt(web3.LAMPORTS_PER_SOL));
 
-      updateConfig(w, w.admin, { ...currentParams(w), admin: newAdmin.publicKey });
-      expect(decodeConfig(w).admin.toBase58()).to.equal(
+      // Nobody can accept while nothing is pending.
+      expect(() => acceptAdmin(w, newAdmin)).to.throw(/InvalidAdmin/i);
+
+      proposeAdmin(w, w.admin, newAdmin.publicKey);
+      expect(decodeConfig(w).pendingAdmin.toBase58()).to.equal(
         newAdmin.publicKey.toBase58()
       );
 
-      // The compiled-in ADMIN_KEY is only the bootstrap signer; after rotation
-      // it has no authority.
-      expect(() =>
-        updateConfig(w, w.admin, currentParams(w))
-      ).to.throw(/InvalidAdmin/i);
+      // Proposing changes nothing: the current admin still has full control
+      // and the proposed key has none. A mistyped proposal is therefore
+      // harmless — it can simply be re-proposed or cancelled.
+      expect(decodeConfig(w).admin.toBase58()).to.equal(w.admin.publicKey.toBase58());
+      updateConfig(w, w.admin, currentParams(w));
+      expect(() => updateConfig(w, newAdmin, currentParams(w))).to.throw(
+        /InvalidAdmin/i
+      );
 
+      // Only the proposed key can accept.
+      const stranger = web3.Keypair.generate();
+      w.svm.airdrop(stranger.publicKey, BigInt(web3.LAMPORTS_PER_SOL));
+      expect(() => acceptAdmin(w, stranger)).to.throw(/InvalidAdmin/i);
+
+      acceptAdmin(w, newAdmin);
+      const cfg = decodeConfig(w);
+      expect(cfg.admin.toBase58()).to.equal(newAdmin.publicKey.toBase58());
+      expect(cfg.pendingAdmin.toBase58()).to.equal(web3.PublicKey.default.toBase58());
+
+      // Authority has moved: the bootstrap ADMIN_KEY is locked out.
+      expect(() => updateConfig(w, w.admin, currentParams(w))).to.throw(
+        /InvalidAdmin/i
+      );
       updateConfig(w, newAdmin, {
         ...currentParams(w),
         maxStake: new anchor.BN(MAX_STAKE.toNumber() + 1),
@@ -258,6 +319,78 @@ describe("health_fun - admin (LiteSVM)", () => {
       expect(decodeConfig(w).maxStake.toString()).to.equal(
         String(MAX_STAKE.toNumber() + 1)
       );
+    });
+
+    it("cancels a pending transfer by proposing the zero key", () => {
+      const w = setupWorld();
+      const newAdmin = web3.Keypair.generate();
+      w.svm.airdrop(newAdmin.publicKey, BigInt(web3.LAMPORTS_PER_SOL));
+
+      proposeAdmin(w, w.admin, newAdmin.publicKey);
+      proposeAdmin(w, w.admin, web3.PublicKey.default);
+
+      expect(decodeConfig(w).pendingAdmin.toBase58()).to.equal(
+        web3.PublicKey.default.toBase58()
+      );
+      expect(() => acceptAdmin(w, newAdmin)).to.throw(/InvalidAdmin/i);
+    });
+  });
+
+  describe("initialize_treasury_for_mint", () => {
+    it("rejects a non-admin signer", () => {
+      const w = setupWorld();
+      const intruder = web3.Keypair.generate();
+      w.svm.airdrop(intruder.publicKey, BigInt(5 * web3.LAMPORTS_PER_SOL));
+
+      // A fresh mint, since setupWorld already created the treasury for w.mint.
+      const mintKeypair = web3.Keypair.generate();
+      const mint = mintKeypair.publicKey;
+      const rent = w.svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE));
+      send(
+        w.svm,
+        [
+          web3.SystemProgram.createAccount({
+            fromPubkey: intruder.publicKey,
+            newAccountPubkey: mint,
+            space: MINT_SIZE,
+            lamports: Number(rent),
+            programId: TOKEN_PROGRAM_ID,
+          }),
+          createInitializeMint2Instruction(mint, DECIMALS, intruder.publicKey, null),
+        ],
+        intruder,
+        [intruder, mintKeypair]
+      );
+
+      const treasuryConfigPda = findTreasuryConfigPda(w.programId, mint);
+      const treasuryAuthorityPda = findTreasuryAuthorityPda(w.programId, mint);
+      const treasuryVault = getAssociatedTokenAddressSync(mint, treasuryAuthorityPda, true);
+
+      // The gate moved from a compiled-in constant to the stored admin field
+      // in this change; this is the regression test for that path.
+      expect(() =>
+        send(
+          w.svm,
+          [
+            w.program.instruction.initializeTreasuryForMint({
+              accounts: {
+                admin: intruder.publicKey,
+                stakeConfig: w.stakeConfigPda,
+                treasuryConfig: treasuryConfigPda,
+                treasuryAuthority: treasuryAuthorityPda,
+                treasuryVault,
+                mint,
+                tokenProgram: TOKEN_PROGRAM_ID,
+                associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+                systemProgram: web3.SystemProgram.programId,
+              },
+            }),
+          ],
+          intruder,
+          [intruder]
+        )
+      ).to.throw(/InvalidAdmin/i);
+      expect(w.svm.getAccount(treasuryConfigPda)).to.equal(null);
     });
   });
 

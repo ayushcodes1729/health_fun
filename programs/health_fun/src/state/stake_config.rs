@@ -17,6 +17,11 @@ pub struct StakeConfig {
     /// Set from the `ADMIN_KEY` bootstrap signer at `initialize_config` and
     /// rotatable afterwards, so the compiled-in key is only needed once.
     pub admin: Pubkey,
+    /// Two-step transfer target. `propose_admin` sets it; `accept_admin`,
+    /// signed by this key, moves it into `admin`. Authority never changes
+    /// hands until the new key has proven it can sign, so a mistyped pubkey
+    /// cannot lock the protocol. `Pubkey::default()` means no transfer pending.
+    pub pending_admin: Pubkey,
 }
 
 impl StakeConfig {
@@ -31,6 +36,13 @@ impl StakeConfig {
         require!(max_stake > 0, crate::error::ErrorCode::InvalidConfigError);
         require!(
             min_lock_duration >= 0 && min_lock_duration <= max_lock_duration,
+            crate::error::ErrorCode::InvalidConfigError
+        );
+        // `stake` requires total_days >= 1, so the shortest possible lock is one
+        // day. A maximum below that rejects every stake. This is the mistake
+        // an admin thinking in hours or days (rather than seconds) would make.
+        require!(
+            max_lock_duration >= 86400,
             crate::error::ErrorCode::InvalidConfigError
         );
         Ok(())

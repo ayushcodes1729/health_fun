@@ -45,6 +45,7 @@ impl<'info> InitializeConfig<'info> {
             verification_key,
             bump: bumps.stake_config,
             admin: self.admin.key(),
+            pending_admin: Pubkey::default(),
         });
 
         Ok(())

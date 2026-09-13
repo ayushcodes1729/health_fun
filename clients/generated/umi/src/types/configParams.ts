@@ -16,9 +16,13 @@ import {
 } from '@metaplex-foundation/umi/serializers';
 
 /**
- * Full replacement of the mutable config fields. Callers pass every value,
- * including the ones they are not changing, so a stale client cannot
- * accidentally revert a field it did not know about.
+ * Full replacement of the mutable limits and the oracle key. Callers pass
+ * every value, including the ones they are not changing, so a stale client
+ * cannot accidentally revert a field it did not know about.
+ *
+ * Admin is deliberately not here: it moves via the two-step
+ * `propose_admin` / `accept_admin` so a mistyped key can never take
+ * authority without first proving it can sign.
  */
 
 export type ConfigParams = {
@@ -26,7 +30,6 @@ export type ConfigParams = {
   minLockDuration: bigint;
   maxLockDuration: bigint;
   verificationKey: PublicKey;
-  admin: PublicKey;
 };
 
 export type ConfigParamsArgs = {
@@ -34,7 +37,6 @@ export type ConfigParamsArgs = {
   minLockDuration: number | bigint;
   maxLockDuration: number | bigint;
   verificationKey: PublicKey;
-  admin: PublicKey;
 };
 
 export function getConfigParamsSerializer(): Serializer<
@@ -47,7 +49,6 @@ export function getConfigParamsSerializer(): Serializer<
       ['minLockDuration', i64()],
       ['maxLockDuration', i64()],
       ['verificationKey', publicKeySerializer()],
-      ['admin', publicKeySerializer()],
     ],
     { description: 'ConfigParams' }
   ) as Serializer<ConfigParamsArgs, ConfigParams>;

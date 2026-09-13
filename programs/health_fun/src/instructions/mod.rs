@@ -21,3 +21,6 @@ pub use update_config::*;
 
 pub mod withdraw_treasury;
 pub use withdraw_treasury::*;
+
+pub mod transfer_admin;
+pub use transfer_admin::*;

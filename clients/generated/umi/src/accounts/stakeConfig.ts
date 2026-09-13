@@ -54,6 +54,13 @@ export type StakeConfigAccountData = {
    * rotatable afterwards, so the compiled-in key is only needed once.
    */
   admin: PublicKey;
+  /**
+   * Two-step transfer target. `propose_admin` sets it; `accept_admin`,
+   * signed by this key, moves it into `admin`. Authority never changes
+   * hands until the new key has proven it can sign, so a mistyped pubkey
+   * cannot lock the protocol. `Pubkey::default()` means no transfer pending.
+   */
+  pendingAdmin: PublicKey;
 };
 
 export type StakeConfigAccountDataArgs = {
@@ -77,6 +84,13 @@ export type StakeConfigAccountDataArgs = {
    * rotatable afterwards, so the compiled-in key is only needed once.
    */
   admin: PublicKey;
+  /**
+   * Two-step transfer target. `propose_admin` sets it; `accept_admin`,
+   * signed by this key, moves it into `admin`. Authority never changes
+   * hands until the new key has proven it can sign, so a mistyped pubkey
+   * cannot lock the protocol. `Pubkey::default()` means no transfer pending.
+   */
+  pendingAdmin: PublicKey;
 };
 
 export function getStakeConfigAccountDataSerializer(): Serializer<
@@ -93,6 +107,7 @@ export function getStakeConfigAccountDataSerializer(): Serializer<
         ['bump', u8()],
         ['verificationKey', publicKeySerializer()],
         ['admin', publicKeySerializer()],
+        ['pendingAdmin', publicKeySerializer()],
       ],
       { description: 'StakeConfigAccountData' }
     ),
@@ -177,6 +192,7 @@ export function getStakeConfigGpaBuilder(
       bump: number;
       verificationKey: PublicKey;
       admin: PublicKey;
+      pendingAdmin: PublicKey;
     }>({
       discriminator: [0, bytes({ size: 8 })],
       maxStake: [8, u64()],
@@ -185,6 +201,7 @@ export function getStakeConfigGpaBuilder(
       bump: [32, u8()],
       verificationKey: [33, publicKeySerializer()],
       admin: [65, publicKeySerializer()],
+      pendingAdmin: [97, publicKeySerializer()],
     })
     .deserializeUsing<StakeConfig>((account) => deserializeStakeConfig(account))
     .whereField(

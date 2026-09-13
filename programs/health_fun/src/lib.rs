@@ -75,4 +75,14 @@ pub mod health_fun {
         ctx.accounts.withdraw_treasury(amount)?;
         Ok(())
     }
+
+    pub fn propose_admin(ctx: Context<ProposeAdmin>, new_admin: Pubkey) -> Result<()> {
+        ctx.accounts.propose_admin(new_admin)?;
+        Ok(())
+    }
+
+    pub fn accept_admin(ctx: Context<AcceptAdmin>) -> Result<()> {
+        ctx.accounts.accept_admin()?;
+        Ok(())
+    }
 }
