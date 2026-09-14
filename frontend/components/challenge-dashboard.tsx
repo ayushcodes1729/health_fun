@@ -13,6 +13,7 @@ import {
   STAKE_MINT_SYMBOL,
 } from "@/lib/solana/config";
 
+import { AuthNotice } from "./auth-notice";
 import { Nav } from "./nav";
 import { Button, Card, Notice, Stat } from "./ui";
 
@@ -34,6 +35,7 @@ export function ChallengeDashboard() {
         </h1>
       </header>
 
+      <AuthNotice />
       {acct.error ? <Notice kind="error">{acct.error}</Notice> : null}
 
       {actions.error ? <Notice kind="error">{actions.error}</Notice> : null}
