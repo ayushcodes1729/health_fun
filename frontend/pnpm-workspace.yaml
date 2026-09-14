@@ -14,3 +14,13 @@ allowBuilds:
   unrs-resolver: true
   usb: false
   utf-8-validate: true
+
+# drizzle-kit declares no dependency on drizzle-orm or the postgres driver; it
+# expects to find them by walking up from its own location. With the package
+# store symlinked outside the project (see next.config.ts) that walk fails.
+# Declaring them as peers makes pnpm link both next to drizzle-kit itself.
+packageExtensions:
+  drizzle-kit:
+    peerDependencies:
+      drizzle-orm: '*'
+      postgres: '*'
