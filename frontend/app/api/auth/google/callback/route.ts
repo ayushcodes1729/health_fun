@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  decodeIdTokenClaims,
   exchangeCodeForGoogleTokens,
   setGoogleSessionCookie,
   validateGoogleOauthState,
 } from "@/lib/google-fit-auth";
+import { upsertUserFromGoogle } from "@/lib/server/users";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -34,7 +36,19 @@ export async function GET(request: NextRequest) {
 
   try {
     const tokens = await exchangeCodeForGoogleTokens(code);
-    await setGoogleSessionCookie(tokens);
+    if (!tokens.id_token) {
+      throw new Error("no_id_token");
+    }
+    // Safe to decode without verifying the JWT: it came straight from
+    // Google's token endpoint over TLS in exchange for our code.
+    const identity = decodeIdTokenClaims(tokens.id_token);
+    const { user, isNew } = await upsertUserFromGoogle(identity);
+    await setGoogleSessionCookie(tokens, identity);
+
+    // First sign-in with no profile yet: collect details before anything else.
+    if (isNew || !user.displayName) {
+      return NextResponse.redirect(new URL("/profile?onboarding=1", request.url));
+    }
     redirectUrl.searchParams.set("auth", "success");
     return NextResponse.redirect(redirectUrl);
   } catch (error) {

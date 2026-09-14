@@ -10,6 +10,7 @@ import {
 } from "@solana/spl-token";
 import { PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 
+import { formatEpochDay } from "@/lib/format";
 import { STAKE_MINT } from "@/lib/solana/config";
 import {
   attestationFromJson,
@@ -209,10 +210,9 @@ export function useActions(onSettled?: () => Promise<void>) {
           .instruction();
 
         const txSignature = await send(new Transaction().add(verifyIx).add(updateIx));
-        const day = new Date(attestation.epochDay * 86_400_000).toISOString().slice(0, 10);
         return {
           signature: txSignature,
-          message: `Synced ${attestation.steps.toLocaleString()} steps for ${day} (UTC)`,
+          message: `Synced ${attestation.steps.toLocaleString()} steps for ${formatEpochDay(attestation.epochDay)} (UTC)`,
         };
       }),
     [program, run, send]

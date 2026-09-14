@@ -7,6 +7,7 @@ allowBuilds:
   bigint-buffer: true
   blake-hash: false
   bufferutil: true
+  esbuild: set this to true or false
   protobufjs: false
   sharp: true
   tiny-secp256k1: false

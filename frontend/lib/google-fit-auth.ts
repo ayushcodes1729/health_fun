@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "crypto";
 import { cookies, headers } from "next/headers";
 
 type GoogleTokenResponse = {
@@ -9,14 +10,68 @@ type GoogleTokenResponse = {
   id_token?: string;
 };
 
-type StoredGoogleSession = {
+export type StoredGoogleSession = {
   accessToken: string;
   expiresAt: number;
   refreshToken?: string;
   idToken?: string;
   scope: string;
   tokenType: string;
+  /** Google account id — the user's identity across the app. */
+  sub: string;
+  email: string;
+  name?: string;
+  picture?: string;
 };
+
+/**
+ * The cookie is HMAC-signed. It carries the user's identity (`sub`), so an
+ * unsigned cookie would let anyone forge a session for any account: edit
+ * their profile, or have the oracle attest steps to their wallet.
+ */
+function sessionSecret(): Buffer {
+  const raw = getRequiredEnv("SESSION_SECRET");
+  if (raw.length < 32) throw new Error("SESSION_SECRET must be at least 32 characters");
+  return Buffer.from(raw);
+}
+
+function sign(payload: string): string {
+  return createHmac("sha256", sessionSecret()).update(payload).digest("base64url");
+}
+
+function encodeSession(session: StoredGoogleSession): string {
+  const payload = Buffer.from(JSON.stringify(session)).toString("base64url");
+  return `${payload}.${sign(payload)}`;
+}
+
+function decodeSession(raw: string): StoredGoogleSession | null {
+  const dot = raw.lastIndexOf(".");
+  if (dot < 0) return null;
+  const payload = raw.slice(0, dot);
+  const mac = raw.slice(dot + 1);
+  const expected = sign(payload);
+  if (mac.length !== expected.length) return null;
+  if (!timingSafeEqual(Buffer.from(mac), Buffer.from(expected))) return null;
+  try {
+    return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
+/** Claims from Google's id_token. Only trusted straight from the token endpoint. */
+export function decodeIdTokenClaims(idToken: string): {
+  sub: string;
+  email: string;
+  name?: string;
+  picture?: string;
+} {
+  const parts = idToken.split(".");
+  if (parts.length !== 3) throw new Error("Malformed id_token");
+  const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+  if (!claims.sub || !claims.email) throw new Error("id_token missing sub/email");
+  return { sub: claims.sub, email: claims.email, name: claims.name, picture: claims.picture };
+}
 
 const GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -136,7 +191,10 @@ export async function exchangeCodeForGoogleTokens(code: string) {
   return tokens;
 }
 
-export async function setGoogleSessionCookie(tokens: GoogleTokenResponse) {
+export async function setGoogleSessionCookie(
+  tokens: GoogleTokenResponse,
+  identity: { sub: string; email: string; name?: string; picture?: string }
+) {
   const cookieStore = await cookies();
   const session: StoredGoogleSession = {
     accessToken: tokens.access_token,
@@ -145,9 +203,10 @@ export async function setGoogleSessionCookie(tokens: GoogleTokenResponse) {
     idToken: tokens.id_token,
     scope: tokens.scope,
     tokenType: tokens.token_type,
+    ...identity,
   };
 
-  cookieStore.set(SESSION_COOKIE_NAME, JSON.stringify(session), {
+  cookieStore.set(SESSION_COOKIE_NAME, encodeSession(session), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -169,11 +228,7 @@ export async function getGoogleSession() {
     return null;
   }
 
-  try {
-    return JSON.parse(rawSession) as StoredGoogleSession;
-  } catch {
-    return null;
-  }
+  return decodeSession(rawSession);
 }
 
 export async function getGoogleConnectionSummary() {
