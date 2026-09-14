@@ -52,11 +52,12 @@ async function getAccessToken(): Promise<string | null> {
     token_type: string;
   };
 
-  // Google omits refresh_token on refresh responses; keep the existing one.
-  await setGoogleSessionCookie({
-    ...tokens,
-    refresh_token: session.refreshToken,
-  });
+  // Google omits refresh_token on refresh responses; keep the existing one,
+  // and carry the identity claims forward unchanged.
+  await setGoogleSessionCookie(
+    { ...tokens, refresh_token: session.refreshToken },
+    { sub: session.sub, email: session.email, name: session.name, picture: session.picture }
+  );
 
   return tokens.access_token;
 }

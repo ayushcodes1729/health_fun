@@ -2,54 +2,39 @@
 
 import { useEffect, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
+import { useAccount } from "@/hooks/use-account";
 import { useActions, type StepsPreview } from "@/hooks/use-actions";
 import { useChallenge } from "@/hooks/use-challenge";
+import { formatEpochDay, formatTokens, formatUnix } from "@/lib/format";
 import {
   SECONDS_PER_DAY,
   STAKE_MINT_DECIMALS,
   STAKE_MINT_SYMBOL,
 } from "@/lib/solana/config";
 
+import { Nav } from "./nav";
 import { Button, Card, Notice, Stat } from "./ui";
-
-function formatTokens(baseUnits: bigint | number | { toString(): string }): string {
-  const n = BigInt(baseUnits.toString());
-  const d = BigInt(10) ** BigInt(STAKE_MINT_DECIMALS);
-  const whole = n / d;
-  const frac = (n % d).toString().padStart(STAKE_MINT_DECIMALS, "0").replace(/0+$/, "");
-  return frac ? `${whole}.${frac}` : whole.toString();
-}
-
-function formatDate(unix: number): string {
-  return new Date(unix * 1000).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
 
 export function ChallengeDashboard() {
   const { publicKey } = useWallet();
   const challenge = useChallenge();
   const actions = useActions(challenge.refresh);
+  const acct = useAccount();
 
   const nowSec = Math.floor(Date.now() / 1000);
   const todayEpochDay = Math.floor(nowSec / SECONDS_PER_DAY);
 
   return (
     <div className="grid gap-6">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">
-            health_fun
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-            Stake on your steps. Hit the goal every day or forfeit.
-          </h1>
-        </div>
-        <WalletMultiButton />
+      <Nav />
+      <header>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+          Stake on your steps. Hit the goal every day or forfeit.
+        </h1>
       </header>
+
+      {acct.error ? <Notice kind="error">{acct.error}</Notice> : null}
 
       {actions.error ? <Notice kind="error">{actions.error}</Notice> : null}
       {challenge.error ? <Notice kind="error">{challenge.error}</Notice> : null}
@@ -99,6 +84,27 @@ export function ChallengeDashboard() {
             hint={`best ${challenge.profile?.longestStreak ?? 0}`}
           />
         </div>
+      ) : null}
+
+      {publicKey && acct.account && acct.account.walletAddress !== publicKey.toBase58() ? (
+        <Card eyebrow="Account" title="Link this wallet to your account">
+          <p className="text-sm text-slate-600">
+            {acct.account.walletAddress
+              ? `Your account is linked to ${acct.account.walletAddress.slice(0, 4)}…${acct.account.walletAddress.slice(-4)}. Link this wallet instead, or switch wallets.`
+              : "Sign a message to prove you control this wallet. Step syncs are only issued for your linked wallet."}
+          </p>
+          <div className="mt-4">
+            <Button onClick={() => void acct.linkWallet()} disabled={acct.busy !== null}>
+              {acct.busy === "Linking wallet" ? "Check your wallet…" : "Link wallet"}
+            </Button>
+          </div>
+        </Card>
+      ) : null}
+
+      {publicKey && !acct.account && acct.account !== undefined ? (
+        <Notice kind="info">
+          Sign in with Google (top right) to link this wallet and sync steps from Google Fit.
+        </Notice>
       ) : null}
 
       {publicKey && (challenge.tokenBalance === null || challenge.tokenBalance === 0n) ? (
@@ -312,7 +318,7 @@ function ActiveChallenge({
         <Stat
           label={unlocked ? "Unlocked" : "Unlocks"}
           value={unlocked ? "now" : `${daysRemaining}d`}
-          hint={formatDate(unlockAt)}
+          hint={formatUnix(unlockAt)}
         />
       </div>
 
@@ -325,7 +331,7 @@ function ActiveChallenge({
               count, and a day can only be attested once — so sync happens the morning after.
             </p>
             <p className="mt-2 text-slate-400">
-              Last synced day: {healthEpochDay > 0 ? `epoch day ${healthEpochDay} (${lastSteps.toLocaleString()} steps)` : "none yet"}
+              Last synced day: {healthEpochDay > 0 ? `${formatEpochDay(healthEpochDay)} (${lastSteps.toLocaleString()} steps)` : "none yet"}
               {yesterday > lastCountableDay ? " · challenge window has ended" : ""}
             </p>
             {!yesterdaySynced ? (
@@ -367,13 +373,16 @@ function ActiveChallenge({
           </Notice>
         ) : null}
 
-        {unlocked ? (
-          <div>
-            <Button onClick={onClaim} disabled={busy !== null}>
-              {busy === "Claiming" ? "Claiming…" : won ? "Claim stake" : "Settle challenge"}
-            </Button>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button onClick={onClaim} disabled={busy !== null || !unlocked}>
+            {busy === "Claiming" ? "Claiming…" : unlocked ? (won ? "Claim stake" : "Settle challenge") : "Claim"}
+          </Button>
+          {!unlocked ? (
+            <span className="text-sm text-slate-500">
+              Available {formatUnix(unlockAt)} · {daysRemaining} day{daysRemaining === 1 ? "" : "s"} left
+            </span>
+          ) : null}
+        </div>
       </div>
     </Card>
   );

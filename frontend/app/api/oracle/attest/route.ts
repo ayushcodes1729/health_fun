@@ -3,6 +3,7 @@ import { Connection, PublicKey } from "@solana/web3.js";
 
 import { fetchStepsForEpochDay } from "@/lib/google-fit-data";
 import { getOracleKeypair } from "@/lib/server/keys";
+import { getCurrentUser } from "@/lib/server/users";
 import {
   attestationToJson,
   buildAttestationMessage,
@@ -23,12 +24,10 @@ import { getProgram } from "@/lib/solana/program";
  * (the program requires epoch_day to strictly increase), so attesting today
  * at 10am would lock in a partial count. Yesterday is always final.
  *
- * Trust boundary: this route signs whatever Google Fit reports for the
- * session cookie's account. The user chooses the wallet address; nothing
- * here ties the Google account to the wallet, so a user could attest their
- * own steps to any wallet. That is acceptable for a devnet MVP and must be
- * addressed (e.g. wallet-signed login bound to the Google identity) before
- * real value is at stake.
+ * Trust boundary: this route only signs for the wallet LINKED to the
+ * signed-in Google account (see /api/wallet/link, which requires the wallet
+ * to prove ownership by signature). Without that binding a user could attest
+ * their own steps to any wallet address.
  */
 export async function POST(request: NextRequest) {
   let user: PublicKey;
@@ -40,6 +39,23 @@ export async function POST(request: NextRequest) {
     preview = body.preview === true;
   } catch {
     return NextResponse.json({ error: "Invalid or missing wallet address" }, { status: 400 });
+  }
+
+  const account = await getCurrentUser();
+  if (!account) {
+    return NextResponse.json({ error: "Sign in with Google first" }, { status: 401 });
+  }
+  if (!account.walletAddress) {
+    return NextResponse.json(
+      { error: "Link this wallet to your account before syncing" },
+      { status: 403 }
+    );
+  }
+  if (account.walletAddress !== user.toBase58()) {
+    return NextResponse.json(
+      { error: `Your account is linked to ${account.walletAddress.slice(0, 4)}…${account.walletAddress.slice(-4)}, not this wallet` },
+      { status: 403 }
+    );
   }
 
   const now = Math.floor(Date.now() / 1000);
