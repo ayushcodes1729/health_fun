@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const oauthError = searchParams.get("error");
-  const redirectUrl = new URL("/", request.url);
+  const redirectUrl = new URL("/challenge", request.url);
 
   if (oauthError) {
     redirectUrl.searchParams.set("auth", "error");

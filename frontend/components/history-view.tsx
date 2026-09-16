@@ -53,14 +53,14 @@ export function HistoryView() {
   if (!account) {
     return (
       <Card eyebrow="Dashboard" title="Sign in to see your history">
-        <p className="text-sm text-slate-600">Your past challenges are tied to your Google account.</p>
+        <p className="text-sm text-white/60">Your past challenges are tied to your Google account.</p>
       </Card>
     );
   }
   if (!account.walletAddress) {
     return (
       <Card eyebrow="Dashboard" title="Link a wallet first">
-        <p className="text-sm text-slate-600">
+        <p className="text-sm text-white/60">
           History is read from the chain for your linked wallet. Link one on the Challenge page.
         </p>
       </Card>
@@ -75,11 +75,11 @@ export function HistoryView() {
   return (
     <div className="grid gap-6">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">Dashboard</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">Dashboard</p>
+        <h1 className="font-display text-3xl font-bold italic tracking-tight text-white">
           {account.displayName ?? account.email}
         </h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <p className="mt-1 text-sm text-white/50">
           Wallet {account.walletAddress.slice(0, 4)}…{account.walletAddress.slice(-4)}
         </p>
       </header>
@@ -100,7 +100,7 @@ export function HistoryView() {
 
       {live.stake ? (
         <Card eyebrow="In progress" title={`${live.stake.daysGoalMet} of ${live.stake.totalDays} days met`}>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-white/60">
             {formatTokens(live.stake.stakedAmount)} {STAKE_MINT_SYMBOL} staked on{" "}
             {live.stake.goalPerDay.toLocaleString()} steps/day · unlocks {formatUnix(Number(live.stake.unlockAt))}
           </p>
@@ -109,15 +109,15 @@ export function HistoryView() {
 
       <Card eyebrow="History" title="Past challenges">
         {rows === null && !error ? (
-          <p className="text-sm text-slate-500">Loading from chain…</p>
+          <p className="text-sm text-white/50">Loading from chain…</p>
         ) : rows && rows.length === 0 ? (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-white/50">
             No settled challenges yet. Your first one will appear here after you claim it.
           </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-[0.16em] text-slate-500">
+              <thead className="text-xs uppercase tracking-[0.16em] text-white/40">
                 <tr>
                   <th className="py-2 pr-4">Staked</th>
                   <th className="py-2 pr-4">Goal</th>
@@ -127,32 +127,32 @@ export function HistoryView() {
                   <th className="py-2">Tx</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-white/8">
                 {rows?.map((r) => (
                   <tr key={r.id} className="tabular-nums">
-                    <td className="py-3 pr-4 font-semibold">
+                    <td className="py-3 pr-4 font-semibold text-white">
                       {formatTokens(r.stakedAmount)} {STAKE_MINT_SYMBOL}
                     </td>
-                    <td className="py-3 pr-4">
+                    <td className="py-3 pr-4 text-white/70">
                       {r.goalPerDay.toLocaleString()} steps × {r.totalDays}d
                     </td>
                     <td className="py-3 pr-4">
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          r.won ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                          r.won ? "bg-accent/15 text-accent" : "bg-red-400/15 text-red-300"
                         }`}
                       >
                         {r.won ? "Completed" : "Forfeited"}
                       </span>
-                      <span className="ml-2 text-slate-500">
+                      <span className="ml-2 text-white/40">
                         {r.daysGoalMet}/{r.totalDays} days
                       </span>
                     </td>
-                    <td className="py-3 pr-4">{formatDateMMDDYY(new Date(r.stakedAt))}</td>
-                    <td className="py-3 pr-4">{formatDateMMDDYY(new Date(r.settledAt))}</td>
+                    <td className="py-3 pr-4 text-white/70">{formatDateMMDDYY(new Date(r.stakedAt))}</td>
+                    <td className="py-3 pr-4 text-white/70">{formatDateMMDDYY(new Date(r.settledAt))}</td>
                     <td className="py-3">
                       <a
-                        className="text-sky-700 underline"
+                        className="text-accent underline"
                         href={`https://explorer.solana.com/tx/${r.settleSignature}?cluster=devnet`}
                         target="_blank"
                         rel="noreferrer"
