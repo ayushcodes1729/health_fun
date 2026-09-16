@@ -15,15 +15,15 @@ export function Card({
 }) {
   return (
     <section
-      className={`rounded-[1.5rem] border border-black/10 bg-white/90 p-6 shadow-[0_16px_48px_rgba(15,23,42,0.06)] backdrop-blur ${className}`}
+      className={`rounded-[1.75rem] border border-white/8 bg-white/[0.03] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.45)] backdrop-blur transition hover:border-white/15 ${className}`}
     >
       {eyebrow ? (
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-700">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-accent">
           {eyebrow}
         </p>
       ) : null}
       {title ? (
-        <h2 className="mt-1 text-2xl font-semibold tracking-tight text-slate-950">
+        <h2 className="mt-1 font-display text-2xl font-semibold tracking-tight text-white">
           {title}
         </h2>
       ) : null}
@@ -46,11 +46,11 @@ export function Button({
   type?: "button" | "submit";
 }) {
   const base =
-    "inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
+    "inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40";
   const styles =
     variant === "primary"
-      ? "bg-slate-950 text-white hover:bg-slate-800"
-      : "border border-slate-300 text-slate-700 hover:border-slate-950 hover:text-slate-950";
+      ? "bg-accent text-accent-foreground shadow-[0_0_24px_-6px_rgba(142,255,54,0.6)] hover:brightness-110 hover:shadow-[0_0_32px_-4px_rgba(142,255,54,0.75)]"
+      : "border border-white/15 text-white/70 hover:border-accent hover:text-accent";
   return (
     <button type={type} onClick={onClick} disabled={disabled} className={`${base} ${styles}`}>
       {children}
@@ -60,19 +60,19 @@ export function Button({
 
 export function Stat({ label, value, hint }: { label: string; value: ReactNode; hint?: string }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">{value}</p>
-      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
+    <div className="rounded-2xl border border-white/8 bg-white/[0.03] p-4">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">{label}</p>
+      <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-white">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-white/40">{hint}</p> : null}
     </div>
   );
 }
 
 export function Notice({ kind, children }: { kind: "error" | "info" | "success"; children: ReactNode }) {
   const styles = {
-    error: "border-red-200 bg-red-50 text-red-800",
-    info: "border-sky-200 bg-sky-50 text-sky-900",
-    success: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    error: "border-red-400/25 bg-red-400/10 text-red-300",
+    info: "border-sky-400/25 bg-sky-400/10 text-sky-300",
+    success: "border-accent/30 bg-accent/10 text-accent",
   }[kind];
   return <div className={`rounded-xl border px-4 py-3 text-sm ${styles}`}>{children}</div>;
 }

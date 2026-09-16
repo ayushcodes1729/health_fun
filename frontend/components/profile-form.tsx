@@ -36,7 +36,7 @@ export function ProfileForm({ onboarding }: { onboarding: boolean }) {
       <Card eyebrow="Profile" title="Sign in to set up your profile">
         <a
           href="/api/auth/google/login"
-          className="mt-2 inline-flex rounded-full bg-slate-950 px-5 py-2.5 text-sm font-semibold text-white"
+          className="mt-2 inline-flex rounded-full bg-accent px-5 py-2.5 text-sm font-semibold text-accent-foreground shadow-[0_0_24px_-6px_rgba(142,255,54,0.6)] hover:brightness-110"
         >
           Sign in with Google
         </a>
@@ -56,20 +56,20 @@ export function ProfileForm({ onboarding }: { onboarding: boolean }) {
     });
     if (ok) {
       setSaved(true);
-      if (onboarding) router.push("/");
+      if (onboarding) router.push("/challenge");
     }
   };
 
   return (
     <div className="grid gap-6">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-sky-700">
+        <p className="text-sm font-semibold uppercase tracking-[0.24em] text-accent">
           {onboarding ? "Welcome" : "Profile"}
         </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+        <h1 className="font-display text-3xl font-bold italic tracking-tight text-white">
           {onboarding ? "Tell us a little about yourself" : "Your details"}
         </h1>
-        <p className="mt-1 text-sm text-slate-500">Signed in as {account.email}</p>
+        <p className="mt-1 text-sm text-white/50">Signed in as {account.email}</p>
       </header>
 
       {error ? <Notice kind="error">{error}</Notice> : null}
@@ -82,13 +82,13 @@ export function ProfileForm({ onboarding }: { onboarding: boolean }) {
           <Field label="Height (cm)" value={heightCm} onChange={setHeightCm} inputMode="numeric" />
           <Field label="Weight (kg)" value={weightKg} onChange={setWeightKg} inputMode="numeric" />
           <label className="grid gap-1 text-sm sm:col-span-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Bio</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">Bio</span>
             <textarea
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               maxLength={280}
               rows={3}
-              className="rounded-xl border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-slate-950"
+              className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-white outline-none focus:border-accent"
             />
           </label>
           <div className="sm:col-span-2">
@@ -103,13 +103,13 @@ export function ProfileForm({ onboarding }: { onboarding: boolean }) {
         <Card eyebrow="Account" title="Linked wallet">
           {account.walletAddress ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="font-mono text-sm text-slate-700">{account.walletAddress}</p>
+              <p className="min-w-0 break-all font-mono text-sm text-white/70">{account.walletAddress}</p>
               <Button variant="secondary" onClick={() => void unlinkWallet()} disabled={busy !== null}>
                 Unlink
               </Button>
             </div>
           ) : (
-            <p className="text-sm text-slate-600">No wallet linked. Link one from the Challenge page.</p>
+            <p className="text-sm text-white/60">No wallet linked. Link one from the Challenge page.</p>
           )}
         </Card>
       ) : null}
@@ -134,13 +134,13 @@ function Field({
 }) {
   return (
     <label className={`grid gap-1 text-sm ${className}`}>
-      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{label}</span>
+      <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">{label}</span>
       <input
         value={value}
         required={required}
         inputMode={inputMode}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-xl border border-slate-300 px-3 py-2 text-slate-950 outline-none focus:border-slate-950"
+        className="rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-white outline-none focus:border-accent"
       />
     </label>
   );
